@@ -432,6 +432,7 @@ Mock::OnChannelOpened(unsigned int aSeq,
                       bool aFromPeer) {
   auto id = atoi(aPath);
   auto resource = GetResource(id);
+  assert(resource != nullptr);
   if (resource) {
     resource->mErr = aErr;
     resource->mFromPeer = aFromPeer;
@@ -440,8 +441,6 @@ Mock::OnChannelOpened(unsigned int aSeq,
       resource->mSeq = aSeq;
       resource->mChanId = aChannel->GetChannelId();
     }
-  } else {
-    abort();
   }
 }
 
@@ -471,7 +470,7 @@ void
 Mock::Dispatch() {
   assert(mMux != nullptr);
   for (auto itr = mIncomings.begin(); itr != mIncomings.end(); ++itr) {
-    printf("Dispatch packet size %d\n", (*itr)->mSize);
+    printf("Mock::Dispatch packet size %d\n", (*itr)->mSize);
     mMux->ReceiveRaw((*itr)->mData, (*itr)->mSize);
     delete *itr;
   }
@@ -485,6 +484,8 @@ public:
   MockPacketListener(ReceiverType&& aReceiver) : mReceiver(std::forward<ReceiverType>(aReceiver)) {}
 
   virtual void OnReceive(Channel* aChannel, const MuxPacket* aPacket) override {
+    printf("MockPacketListener::OnReceiver channel %d, packet size %d\n",
+           aChannel->GetChannelId(), aPacket->mSize);
     mReceiver(aPacket);
   }
   virtual void OnClose(Channel* aChannel) override {
@@ -521,10 +522,12 @@ test_open() {
   Mock mock2;
   mock1.SetPeer(&mock2);
   mock2.SetPeer(&mock1);
+
   mock1.AddResource(2, 8181, listener1);
   auto resource1 = mock1.GetResource(2);
   mock2.AddResource(2, 18181, listener2);
   auto resource2 = mock2.GetResource(2);
+
   Mux mux1(Mux::MuxSide::SideServer);
   Mux mux2(Mux::MuxSide::SideClient);
   mux1.SetChanListener(&mock1);
@@ -534,10 +537,10 @@ test_open() {
   mock1.SetMux(&mux1);
   mock2.SetMux(&mux2);
 
+  printf("Open 2\n");
   auto seq_open = mux1.Open("2");
   mock2.Dispatch();
   assert(!resource2->mFromPeer);
-  printf("seq %d %d\n", seq_open, resource2->mSeq);
   assert(resource2->mSeq == seq_open);
   assert(resource2->mErr == 0);
   mock1.Dispatch();
@@ -549,13 +552,45 @@ test_open() {
 
   auto chan_id = resource1->mChanId;
   auto chan1 = mux1.GetChannel(chan_id);
+
+  auto sz = 389;
+  printf("Send data %d\n", sz);
+  std::unique_ptr<DataPacket> data(DataPacket::Create(sz, chan_id));
+  for (int i = 0; i < sz; i++) {
+    data->mPayload[i] = 3;
+  }
+  chan1->Send(data.get());
+  assert(result2 == 0);
+  mock2.Dispatch();
+  assert(result2 == sz * 3);
+
+  auto chan2 = mux2.GetChannel(chan_id);
+
+  sz = 512;
+  printf("Send data %d\n", sz);
+  data = std::unique_ptr<DataPacket>(DataPacket::Create(sz, chan_id));
+  for (int i = 0; i < sz; i++) {
+    data->mPayload[i] = 5;
+  }
+  chan2->Send(data.get());
+  assert(result1 == 0);
+  mock1.Dispatch();
+  assert(result1 == sz * 5);
+
   assert(!listener1->mClosed);
   assert(!listener2->mClosed);
+  printf("Close channel %d\n", chan_id);
   chan1->Close();
   assert(listener1->mClosed);
   assert(!listener2->mClosed);
   mock2.Dispatch();
   assert(listener2->mClosed);
+
+  assert(mux1.GetChannel(chan_id) == nullptr);
+  assert(mux2.GetChannel(chan_id) == nullptr);
+
+  assert(listener1->mError == 0);
+  assert(listener2->mError == 0);
 }
 
 int
