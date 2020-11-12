@@ -8,6 +8,8 @@
 #include <signal.h>
 #include <asm/unistd.h>
 
+#include <sys/prctl.h>
+
 #include <linux/seccomp.h>
 #include <linux/filter.h>
 #include <linux/audit.h>
@@ -20,6 +22,7 @@ static int
 install_filter() {
   extern struct sock_fprog sandbox_filter_prog;
 
+  prctl(PR_SET_NO_NEW_PRIVS, 1);
   if (seccomp(SECCOMP_SET_MODE_FILTER, 0, &sandbox_filter_prog)) {
     perror("seccomp");
     return 1;
