@@ -10,3 +10,6 @@ from the local, but the processes are created at remote machines.
 The basic idea is to use seccomp to create a sandbox at remote, and
 translate IO to requsts over network.  The files are cached at remote
 machines for efficiency.
+
+# playground/
+ - tryseccomp.c is an example of interception of syscalls with seccomp.
