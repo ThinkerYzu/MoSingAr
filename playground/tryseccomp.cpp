@@ -9,6 +9,8 @@
 #include <ucontext.h>
 #include <asm/unistd.h>
 
+#include <sys/prctl.h>
+
 #include <linux/seccomp.h>
 #include <linux/filter.h>
 #include <linux/audit.h>
@@ -63,6 +65,7 @@ install_filter() {
     .filter = filter,
   };
 
+  prctl(PR_SET_NO_NEW_PRIVS, 1);
   if (seccomp(SECCOMP_SET_MODE_FILTER, 0, &prog)) {
     perror("seccomp");
     return 1;
