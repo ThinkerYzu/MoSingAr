@@ -14,6 +14,9 @@
 #include <linux/filter.h>
 #include <linux/audit.h>
 
+#include <fcntl.h>
+#include <sys/stat.h>
+
 static int seccomp(unsigned int operation, unsigned int flags, void *args) {
   return syscall(__NR_seccomp, operation, flags, args);
 }
@@ -30,10 +33,142 @@ install_filter() {
   return 0;
 }
 
+class sandbox_bridge {
+public:
+  int send_open(const char* path, int flags, mode_t mode) {
+    return 0;
+  }
+  int send_openat(int dirfd, const char* path, int flags, mode_t mode) {
+    return 0;
+  }
+  int send_access(const char* path, int mode) {
+    return 0;
+  }
+  int send_fstat(int fd, struct stat* statbuf) {
+    return 0;
+  }
+  int send_stat(const char* path, struct stat* statbuf) {
+    return 0;
+  }
+  int send_lstat(const char* path, struct stat* statbuf) {
+    return 0;
+  }
+  int send_execve(const char* filename, char*const* argv, char*const* envp) {
+    return 0;
+  }
+  size_t send_readlink(const char* path, char* buf, size_t bufsize) {
+    return 0;
+  }
+  int send_unlink(const char* path) {
+    return 0;
+  }
+  pid_t send_vfork() {
+    return 0;
+  }
+
+private:
+  int sock;
+};
+
+static sandbox_bridge bridge;
+
 static void
 handle_syscall(siginfo_t* info, ucontext_t* context) {
   auto ctx = context;
-  SECCOMP_RESULT(ctx) = 111;
+  auto syscall = SECCOMP_SYSCALL(ctx);
+  switch (syscall) {
+  case __NR_open:
+    {
+      auto path = (const char*)SECCOMP_PARM1(ctx);
+      auto flags = (int)SECCOMP_PARM2(ctx);
+      auto mode = (mode_t)SECCOMP_PARM3(ctx);
+      auto r = bridge.send_open(path, flags, mode);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_openat:
+    {
+      auto dirfd = (int)SECCOMP_PARM1(ctx);
+      auto path = (const char*)SECCOMP_PARM2(ctx);
+      auto flags = (int)SECCOMP_PARM3(ctx);
+      auto mode = (mode_t)SECCOMP_PARM4(ctx);
+      auto r = bridge.send_openat(dirfd, path, flags, mode);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_access:
+    {
+      auto path = (const char*)SECCOMP_PARM1(ctx);
+      auto mode = (int)SECCOMP_PARM2(ctx);
+      auto r = bridge.send_access(path, mode);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_fstat:
+    {
+      auto fd = (int)SECCOMP_PARM1(ctx);
+      auto statbuf = (struct stat*)SECCOMP_PARM2(ctx);
+      auto r = bridge.send_fstat(fd, statbuf);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_stat:
+    {
+      auto path = (const char*)SECCOMP_PARM1(ctx);
+      auto statbuf = (struct stat*)SECCOMP_PARM2(ctx);
+      auto r = bridge.send_stat(path, statbuf);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_lstat:
+    {
+      auto path = (const char*)SECCOMP_PARM1(ctx);
+      auto statbuf = (struct stat*)SECCOMP_PARM2(ctx);
+      auto r = bridge.send_lstat(path, statbuf);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_execve:
+    {
+      auto filename = (const char*)SECCOMP_PARM1(ctx);
+      auto argv = (char *const*)SECCOMP_PARM2(ctx);
+      auto envp = (char *const*)SECCOMP_PARM3(ctx);
+      auto r = bridge.send_execve(filename, argv, envp);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_readlink:
+    {
+      auto path = (const char*)SECCOMP_PARM1(ctx);
+      auto buf = (char*)SECCOMP_PARM2(ctx);
+      auto bufsize = (size_t)SECCOMP_PARM3(ctx);
+      auto r = bridge.send_readlink(path, buf, bufsize);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_unlink:
+    {
+      auto path = (const char*)SECCOMP_PARM1(ctx);
+      auto r = bridge.send_unlink(path);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_vfork:
+    {
+      auto r = bridge.send_vfork();
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+  }
 }
 
 static void
