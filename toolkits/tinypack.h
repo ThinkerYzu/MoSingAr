@@ -114,36 +114,6 @@ public:
 class tinypacker : public tinypack<void, void> {
 };
 
-#if 0
-template <typename Base, typename T>
-class tinyunpack {
-public:
-  tinyunpack(const Base& base, T& value)
-    : base(base)
-    , value(&value) {}
-
-  tinyunpack(const tinyunpack<Base, T>& other)
-    : base(other.base)
-    , value(other.value) {}
-
-  template <typename V>
-  tinyunpack<tinyunpack<Base, T>, V> field(V& v) {
-    return tinyunpack<tinyunpack<Base, T>, V>(*this, v);
-  }
-
-  int get_size() {
-    return base.get_size() + value_size();
-  }
-  int value_size() {
-    return tinypack_value_trait<T>::rsize(value);
-  }
-
-private:
-  Base base;
-  T* value;
-};
-#endif
-
 template <typename Base, typename T>
 class tinyunpack_nobuf {
 public:
