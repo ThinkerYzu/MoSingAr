@@ -1,10 +1,13 @@
 
-all:: seccomp.o filter.o
+all:: seccomp.o filter.o bridge.o
 
-seccomp.o: seccomp.cpp seccomp.h
+seccomp.o: seccomp.cpp seccomp.h bridge.h
 	$(CXX) -c $<
 
 filter.o: filter.cpp seccomp.h
+	$(CXX) -c $<
+
+bridge.o: bridge.cpp bridge.h
 	$(CXX) -c $<
 
 clean::

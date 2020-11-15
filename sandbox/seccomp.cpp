@@ -3,6 +3,8 @@
  */
 #include "seccomp.h"
 
+#include "bridge.h"
+
 #include <unistd.h>
 #include <stdio.h>
 #include <signal.h>
@@ -32,43 +34,6 @@ install_filter() {
   }
   return 0;
 }
-
-class sandbox_bridge {
-public:
-  int send_open(const char* path, int flags, mode_t mode) {
-    return 0;
-  }
-  int send_openat(int dirfd, const char* path, int flags, mode_t mode) {
-    return 0;
-  }
-  int send_access(const char* path, int mode) {
-    return 0;
-  }
-  int send_fstat(int fd, struct stat* statbuf) {
-    return 0;
-  }
-  int send_stat(const char* path, struct stat* statbuf) {
-    return 0;
-  }
-  int send_lstat(const char* path, struct stat* statbuf) {
-    return 0;
-  }
-  int send_execve(const char* filename, char*const* argv, char*const* envp) {
-    return 0;
-  }
-  size_t send_readlink(const char* path, char* buf, size_t bufsize) {
-    return 0;
-  }
-  int send_unlink(const char* path) {
-    return 0;
-  }
-  pid_t send_vfork() {
-    return 0;
-  }
-
-private:
-  int sock;
-};
 
 static sandbox_bridge bridge;
 
