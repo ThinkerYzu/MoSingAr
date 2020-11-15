@@ -4,6 +4,26 @@
 #ifndef __tinypack_h_
 #define __tinypack_h_
 
+/**
+ * tinypack_value_trait of a type define how data of the type should
+ * be pack and unpacked.  Whne a new type are added, a respective
+ * tinypack_value_trait should be defined to handle data of the new
+ * type.
+ *
+ * |tinypack| chains values together to pack all values into a
+ * buffer. |tinypack<B, T>::field(V v)| add a new value of type V to
+ * the chain, and return a new instance of type |tinypack<Base, V>|
+ * where |Base| is |tinypack<B, T>|, the type of the instance of that
+ * |field()| is called.  So, for a |tinypack| that pack 2 values of
+ * type int and double, the type of the final instance will be
+ * |tinypack<tinypack<tinypacker, int>, double>|.  |tinypacker| is
+ * actually |tinypack<void, void>|, where all instance of |tinypack|
+ * start with.
+ *
+ * |tinyunpack| is similar to |tinypack|, but it is for unpacking
+ * data from a buffer.
+ */
+
 #include <utility>
 #include <string.h>
 
@@ -111,17 +131,16 @@ public:
   void writebuf(char* buf) {}
 };
 
-class tinypacker : public tinypack<void, void> {
-};
+typedef tinypack<void, void> tinypacker;
 
 template <typename Base, typename T>
-class tinyunpack_nobuf {
+class tinyunpack {
 public:
-  tinyunpack_nobuf(const tinyunpack_nobuf<Base, T>& other)
+  tinyunpack(const tinyunpack<Base, T>& other)
     : base(other.base)
     , value(other.value) {}
 
-  tinyunpack_nobuf(const Base& base, T& value)
+  tinyunpack(const Base& base, T& value)
     : base(base)
     , value(&value) {}
 
@@ -147,44 +166,43 @@ public:
     base.unpack(buf, bufsz);
   }
 
-private:
-  Base base;
-  T* value;
-};
-
-template <typename Base, typename T>
-class tinyunpack : public tinyunpack_nobuf<Base, T> {
-public:
-  tinyunpack(const Base& base, T& value, const char* buf, unsigned int bufsz)
-    : tinyunpack_nobuf<Base, T>(base, value)
-    , buf(buf)
-    , bufsz(bufsz) {}
+  const char* get_data() {
+    base.get_data();
+  }
+  unsigned int get_datasize() {
+    base.get_datasize();
+  }
 
   template <typename V>
-  tinyunpack<tinyunpack_nobuf<Base, T>, V> field(V& v) {
-    return tinyunpack<tinyunpack_nobuf<Base, T>, V>(*this, v, buf, bufsz);
+  tinyunpack<tinyunpack<Base, T>, V> field(V& v) {
+    return tinyunpack<tinyunpack<Base, T>, V>(*this, v);
   }
 
   int get_size() {
-    return tinyunpack_nobuf<Base, T>::get_size(buf, bufsz);
+    return get_size(get_data(), get_datasize());
   }
   bool check_completed() {
     return get_size() >= 0;
   }
   void unpack() {
-    tinyunpack_nobuf<Base, T>::unpack(buf, bufsz);
+    unpack(get_data(), get_datasize());
   }
 
 private:
-  const char* buf;
-  unsigned int bufsz;
+  Base base;
+  T* value;
 };
 
 template<>
-class tinyunpack_nobuf<void, void> {
+class tinyunpack<void, void> {
 public:
-  tinyunpack_nobuf() {}
-  tinyunpack_nobuf(const tinyunpack<void, void>& other) {}
+  tinyunpack(const char* buf, unsigned int bufsz)
+    : buf(buf)
+    , bufsz(bufsz) {}
+
+  tinyunpack(const tinyunpack<void, void>& other)
+    : buf(other.buf)
+    , bufsz(other.bufsz) {}
 
   template <typename V>
   tinyunpack<tinyunpack<void, void>, V> field(V& v) {
@@ -196,23 +214,15 @@ public:
   void unpack(const char* buf, unsigned int bufsz) {
     return;
   }
-};
 
-template<>
-class tinyunpack<void, void> : public tinyunpack_nobuf<void, void> {
-public:
-  tinyunpack(const char* buf, unsigned int bufsz)
-    : buf(buf)
-    , bufsz(bufsz) {}
+  const char* get_data() { return buf; }
 
-  template <typename V>
-  tinyunpack<tinyunpack_nobuf<void, void>, V> field(V& v) {
-    return tinyunpack<tinyunpack_nobuf<void, void>, V>(*this, v, buf, bufsz);
-  }
+  unsigned int get_datasize() { return bufsz; }
 
   int get_size() {
     return 0;
   }
+
   bool check_completion() {
     return true;
   }
@@ -224,10 +234,6 @@ private:
   unsigned int bufsz;
 };
 
-class tinyunpacker : public tinyunpack<void, void> {
-public:
-  tinyunpacker(const char* buf, unsigned int bufsz)
-    : tinyunpack(buf, bufsz) {}
-};
+typedef tinyunpack<void, void> tinyunpacker;
 
 #endif /* __tinypack_h_ */
