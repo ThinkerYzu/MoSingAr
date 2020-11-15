@@ -63,6 +63,23 @@ handle_syscall(siginfo_t* info, ucontext_t* context) {
     }
     break;
 
+  case __NR_dup:
+    {
+      auto fd = (int)SECCOMP_PARM1(ctx);
+      auto r = bridge.send_dup(fd);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_dup2:
+    {
+      auto oldfd = (int)SECCOMP_PARM1(ctx);
+      auto newfd = (int)SECCOMP_PARM2(ctx);
+      auto r = bridge.send_dup2(oldfd, newfd);
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
   case __NR_access:
     {
       auto path = (const char*)SECCOMP_PARM1(ctx);
@@ -138,7 +155,6 @@ handle_syscall(siginfo_t* info, ucontext_t* context) {
 
 static void
 sigsys(int nr, siginfo_t *info, void* void_context) {
-  printf("sigsys %d\n", nr);
   ucontext_t *ctx = (ucontext_t*)void_context;
   handle_syscall(info, ctx);
 }
@@ -168,4 +184,5 @@ int
 init_seccomp() {
   install_sigsys();
   install_filter();
+  return 0;
 }

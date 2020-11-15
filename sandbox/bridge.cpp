@@ -6,6 +6,11 @@
 #include "tinypack.h"
 
 #include <memory>
+#include <assert.h>
+
+#define MAGIC_DUP_FD 254
+#define DUMMY_DUP_FD 253
+
 
 int sandbox_bridge::send_open(const char* path, int flags, mode_t mode) {
   auto pack = tinypacker()
@@ -28,6 +33,33 @@ int sandbox_bridge::send_openat(int dirfd, const char* path, int flags, mode_t m
   std::unique_ptr<char> buf(pack.pack_size_prefix());
   write(sock, buf.get(), pack.get_size_prefix());
   return 0;
+}
+
+int sandbox_bridge::send_dup(int oldfd) {
+  auto r = dup2(oldfd, MAGIC_DUP_FD);
+  if (r < 0) {
+    return r;
+  }
+  r = dup(MAGIC_DUP_FD);
+  auto saved_errno = errno;
+  dup2(DUMMY_DUP_FD, MAGIC_DUP_FD);
+  errno = saved_errno;
+  return r;
+}
+
+int sandbox_bridge::send_dup2(int oldfd, int newfd) {
+  assert(oldfd != MAGIC_DUP_FD && newfd != MAGIC_DUP_FD);
+  auto r = dup2(oldfd, MAGIC_DUP_FD);
+  if (r < 0) {
+    return r;
+  }
+  r = dup2(MAGIC_DUP_FD, newfd);
+  if (r < 0) {
+    auto saved_errno = errno;
+    dup2(DUMMY_DUP_FD, MAGIC_DUP_FD);
+    errno = saved_errno;
+  }
+  return r;
 }
 
 int sandbox_bridge::send_access(const char* path, int mode) {

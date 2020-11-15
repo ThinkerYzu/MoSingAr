@@ -179,10 +179,10 @@ public:
   }
 
   const char* get_data() {
-    base.get_data();
+    return base.get_data();
   }
   unsigned int get_datasize() {
-    base.get_datasize();
+    return base.get_datasize();
   }
 
   template <typename V>

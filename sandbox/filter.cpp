@@ -10,10 +10,26 @@
 #include <linux/seccomp.h>
 #include <linux/filter.h>
 
+#define MAGIC_DUP_FD 254
+
 
 static struct sock_filter filter[] = {
   BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
            (offsetof(struct seccomp_data, nr))),
+
+  BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_dup, 0, 2),
+  BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+           (offsetof(struct seccomp_data, args[1]))),
+  BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, MAGIC_DUP_FD, 15, 16),
+
+  BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_dup2, 0, 4),
+  BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+           (offsetof(struct seccomp_data, args[1]))),
+  BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, MAGIC_DUP_FD, 12, 13),
+  BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+           (offsetof(struct seccomp_data, args[2]))),
+  BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, MAGIC_DUP_FD, 10, 11),
+
   BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_open, 10, 0),
   BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_openat, 9, 0),
   BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_access, 8, 0),

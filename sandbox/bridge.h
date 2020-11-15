@@ -11,6 +11,8 @@ class sandbox_bridge {
 public:
   int send_open(const char* path, int flags, mode_t mode);
   int send_openat(int dirfd, const char* path, int flags, mode_t mode);
+  int send_dup(int oldfd);
+  int send_dup2(int oldfd, int newfd);
   int send_access(const char* path, int mode);
   int send_fstat(int fd, struct stat* statbuf);
   int send_stat(const char* path, struct stat* statbuf);
