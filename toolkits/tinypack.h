@@ -101,9 +101,21 @@ public:
     return tinypack_value_trait<T>::size(value);
   }
 
-  char*pack() {
+  char* pack() {
     auto buf = new char[get_size()];
     writebuf(buf);
+    return buf;
+  }
+
+  int get_size_prefix() {
+    return get_size() + sizeof(unsigned int);
+  }
+
+  char* pack_size_prefix() {
+    auto sz = get_size();
+    auto buf = new char[sizeof(unsigned int) + sz];
+    memcpy(buf, &sz, sizeof(unsigned int));
+    writebuf(buf + sizeof(unsigned int));
     return buf;
   }
 

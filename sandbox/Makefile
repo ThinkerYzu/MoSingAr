@@ -8,7 +8,7 @@ filter.o: filter.cpp seccomp.h
 	$(CXX) -c $<
 
 bridge.o: bridge.cpp bridge.h
-	$(CXX) -c $<
+	$(CXX) -c $< -I../toolkits
 
 clean::
 	rm -f *~ *.o
