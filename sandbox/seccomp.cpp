@@ -21,8 +21,12 @@
 
 #include <errno.h>
 
+extern "C" {
+extern long syscall_trampoline(long, ...);
+}
+
 static int seccomp(unsigned int operation, unsigned int flags, void *args) {
-  return syscall(__NR_seccomp, operation, flags, args);
+  return syscall_trampoline(__NR_seccomp, operation, flags, args);
 }
 
 static int
