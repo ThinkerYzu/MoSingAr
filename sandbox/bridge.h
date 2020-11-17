@@ -26,4 +26,22 @@ private:
   int sock;
 };
 
+/**
+ * Trampoline will be placed at this fix address.
+ *
+ * Trampoline is a copy of |syscall_trampoline()|.  It always stays at
+ * the same fixed address.  All syscalls made through the trampoline
+ * will always be allowed by the filter.  The filter check if a
+ * syscall is from the trampoline by checking it's instruction
+ * pointer.  It should be in the range of TRAMPOLINE_ADDR ~ +4096
+ * bytes.
+ *
+ * |syscall_trampoline()| is another implementation of |syscall()|,
+ * however it return negative error code instead of -1 and putting the
+ * (postive) error code in |errno|, like |syscall()|.  The returned
+ * value of |syscall_trampoline()| should be resturned by the signal
+ * handler so that it can set a correct value to |errno|.
+ */
+#define TRAMPOLINE_ADDR 0x200000000000
+
 #endif /* __bridge_h_ */

@@ -19,6 +19,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include <errno.h>
+
 static int seccomp(unsigned int operation, unsigned int flags, void *args) {
   return syscall(__NR_seccomp, operation, flags, args);
 }
