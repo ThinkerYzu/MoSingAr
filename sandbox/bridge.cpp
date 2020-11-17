@@ -25,8 +25,9 @@ int sandbox_bridge::send_open(const char* path, int flags, mode_t mode) {
     .field(path)
     .field(flags)
     .field(mode);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
 
@@ -37,8 +38,9 @@ int sandbox_bridge::send_openat(int dirfd, const char* path, int flags, mode_t m
     .field(path)
     .field(flags)
     .field(mode);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
 
@@ -57,8 +59,9 @@ int sandbox_bridge::send_access(const char* path, int mode) {
     .field(bridge::cmd_access)
     .field(path)
     .field(mode);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
 
@@ -67,8 +70,9 @@ int sandbox_bridge::send_fstat(int fd, struct stat* statbuf) {
     .field(bridge::cmd_fstat)
     .field(fd)
     .field(statbuf);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
 
@@ -77,8 +81,9 @@ int sandbox_bridge::send_stat(const char* path, struct stat* statbuf) {
     .field(bridge::cmd_stat)
     .field(path)
     .field(statbuf);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
 
@@ -87,8 +92,9 @@ int sandbox_bridge::send_lstat(const char* path, struct stat* statbuf) {
     .field(bridge::cmd_lstat)
     .field(path)
     .field(statbuf);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
 
@@ -110,8 +116,9 @@ size_t sandbox_bridge::send_readlink(const char* path, char* _buf, size_t _bufsi
   auto pack = tinypacker()
     .field(bridge::cmd_readlink)
     .field(path);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
 
@@ -119,15 +126,17 @@ int sandbox_bridge::send_unlink(const char* path) {
   auto pack = tinypacker()
     .field(bridge::cmd_unlink)
     .field(path);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
 
 pid_t sandbox_bridge::send_vfork() {
   auto pack = tinypacker()
     .field(bridge::cmd_vfork);
-  std::unique_ptr<char> buf(pack.pack_size_prefix());
-  write(sock, buf.get(), pack.get_size_prefix());
+  auto buf = pack.pack_size_prefix();
+  write(sock, buf, pack.get_size_prefix());
+  delete buf;
   return 0;
 }
