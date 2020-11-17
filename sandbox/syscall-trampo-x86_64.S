@@ -4,6 +4,7 @@
  * This implementation return a negative error code instead.
  */
         .text
+        .hidden syscall_trampoline
         .global syscall_trampoline
         .type syscall_trampoline, @function
 syscall_trampoline:

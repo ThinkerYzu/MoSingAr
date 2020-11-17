@@ -10,7 +10,7 @@ syscall-trampo.bin: syscall-trampo.o
 	objcopy  -j .text -O binary syscall-trampo.o syscall-trampo.bin
 
 syscall-trampo.o: syscall-trampo-x86_64.S
-	gcc -c -fpic -o $@ $<
+	$(CXX) $(CFLAGS) -c -o $@ $<
 
 seccomp.o: seccomp.cpp seccomp.h bridge.h
 	$(CXX) $(CFLAGS) -c $<
