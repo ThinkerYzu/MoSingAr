@@ -1,5 +1,5 @@
 
-CFLAGS := -Wall -Werror -fpic
+CFLAGS := -Wall -Werror -fpic -fvisibility=hidden
 
 all:: libtongdao.so syscall-trampo.bin
 
