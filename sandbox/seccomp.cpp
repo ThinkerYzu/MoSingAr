@@ -26,7 +26,12 @@ extern long syscall_trampoline(long, ...);
 }
 
 static int seccomp(unsigned int operation, unsigned int flags, void *args) {
-  return syscall_trampoline(__NR_seccomp, operation, flags, args);
+  auto r = syscall_trampoline(__NR_seccomp, operation, flags, args);
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+  return r;
 }
 
 static int
