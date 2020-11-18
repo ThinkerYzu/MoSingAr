@@ -20,19 +20,10 @@
 #include <sys/stat.h>
 
 #include <stdlib.h>
-#include <errno.h>
 
 extern "C" {
 extern long syscall_trampoline(long, ...);
-}
-
-static int seccomp(unsigned int operation, unsigned int flags, void *args) {
-  auto r = syscall_trampoline(__NR_seccomp, operation, flags, args);
-  if (r < 0) {
-    errno = -r;
-    r = -1;
-  }
-  return r;
+extern int seccomp(unsigned int, unsigned int, void *);
 }
 
 static int

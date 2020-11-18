@@ -4,6 +4,8 @@
 #include <errno.h>
 #include <asm/signal.h>
 
+#define NO_ERRNO
+
 extern "C" {
 
 extern long syscall_trampoline(long, ...);
@@ -22,20 +24,24 @@ memcpy(void* dest, const void* src, size_t n) {
 void *
 mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset) {
   auto r = syscall_trampoline(__NR_mmap, addr, length, prot, flags, fd, offset);
+#ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
     r = -1;
   }
+#endif
   return (void*)r;
 }
 
 ssize_t
 write(int fd, const void* buf, size_t count) {
   auto r = syscall_trampoline(__NR_write, fd, buf, count);
+#ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
     r = -1;
   }
+#endif
   return r;
 }
 
@@ -71,10 +77,12 @@ sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
   }
 
   auto r = syscall_trampoline(__NR_rt_sigaction, signum, &kact, &koldact, 8);
+#ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
     r = -1;
   }
+#endif
 
   if (oldact != nullptr) {
     oldact->sa_handler = koldact.k_sa_handler;
@@ -90,10 +98,12 @@ prctl(int option, unsigned long arg2, unsigned long arg3,
       unsigned long arg4, unsigned long arg5) {
   arg3 = arg4 = arg5 = 0;
   auto r = syscall_trampoline(__NR_prctl, option, arg2, arg3, arg4, arg5);
+#ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
     r = -1;
   }
+#endif
   return r;
 }
 
@@ -104,6 +114,17 @@ abort() {
 
 void
 perror(const char* s) {
+}
+
+int seccomp(unsigned int operation, unsigned int flags, void *args) {
+  auto r = syscall_trampoline(__NR_seccomp, operation, flags, args);
+#ifndef NO_ERRNO
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+#endif
+  return r;
 }
 
 }
