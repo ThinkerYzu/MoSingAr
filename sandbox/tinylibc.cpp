@@ -97,4 +97,13 @@ prctl(int option, unsigned long arg2, unsigned long arg3,
   return r;
 }
 
+void
+abort() {
+  syscall_trampoline(__NR_exit, 255);
+}
+
+void
+perror(const char* s) {
+}
+
 }

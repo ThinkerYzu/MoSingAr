@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include <stdlib.h>
 #include <errno.h>
 
 extern "C" {
@@ -41,7 +42,7 @@ install_filter() {
   prctl(PR_SET_NO_NEW_PRIVS, 1);
   if (seccomp(SECCOMP_SET_MODE_FILTER, 0, &sandbox_filter_prog)) {
     perror("seccomp");
-    return 1;
+    abort();
   }
   return 0;
 }
@@ -178,6 +179,7 @@ install_sigsys() {
   int r = sigaction(SIGSYS, &act, nullptr);
   if (r < 0) {
     perror("sigaction");
+    abort();
   }
 }
 
