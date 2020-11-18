@@ -175,7 +175,7 @@ install_sigsys() {
   struct sigaction act;
   act.sa_sigaction = &sigsys;
   act.sa_flags = SA_SIGINFO | SA_NODEFER;
-  int r = sigaction(SIGSYS, &act, NULL);
+  int r = sigaction(SIGSYS, &act, nullptr);
   if (r < 0) {
     perror("sigaction");
   }
