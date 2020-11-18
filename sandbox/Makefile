@@ -1,13 +1,13 @@
 
 CFLAGS := -Wall -Werror -fpic -fvisibility=hidden -fno-builtin -nostdlib
 
-libtongdao_so_OBJS := seccomp.o filter.o bridge.o \
-	bootstrap.o syscall-trampo.o tinylibc.o sig-trampo.o
+libtongdao_so_OBJS := bootstrap.o seccomp.o filter.o bridge.o \
+	syscall-trampo.o tinylibc.o sig-trampo.o
 
 all:: libtongdao.so syscall-trampo.bin
 
 libtongdao.so:  $(libtongdao_so_OBJS)
-	$(CXX) -shared -o $@ $(libtongdao_so_OBJS)
+	$(CXX) -nostartfiles -shared -o $@ $(libtongdao_so_OBJS)
 
 syscall-trampo.bin: syscall-trampo.o
 	objcopy  -j .text -O binary syscall-trampo.o syscall-trampo.bin
