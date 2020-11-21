@@ -27,7 +27,7 @@ int sandbox_bridge::send_open(const char* path, int flags, mode_t mode) {
     .field(mode);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }
 
@@ -40,7 +40,7 @@ int sandbox_bridge::send_openat(int dirfd, const char* path, int flags, mode_t m
     .field(mode);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }
 
@@ -61,7 +61,7 @@ int sandbox_bridge::send_access(const char* path, int mode) {
     .field(mode);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }
 
@@ -72,7 +72,7 @@ int sandbox_bridge::send_fstat(int fd, struct stat* statbuf) {
     .field(statbuf);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }
 
@@ -83,7 +83,7 @@ int sandbox_bridge::send_stat(const char* path, struct stat* statbuf) {
     .field(statbuf);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }
 
@@ -94,7 +94,7 @@ int sandbox_bridge::send_lstat(const char* path, struct stat* statbuf) {
     .field(statbuf);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }
 
@@ -118,7 +118,7 @@ size_t sandbox_bridge::send_readlink(const char* path, char* _buf, size_t _bufsi
     .field(path);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }
 
@@ -128,7 +128,7 @@ int sandbox_bridge::send_unlink(const char* path) {
     .field(path);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }
 
@@ -137,6 +137,6 @@ pid_t sandbox_bridge::send_vfork() {
     .field(bridge::cmd_vfork);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
-  delete buf;
+  free(buf);
   return 0;
 }

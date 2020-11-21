@@ -26,6 +26,7 @@
 
 #include <utility>
 #include <string.h>
+#include <stdlib.h>
 
 template <typename T>
 class tinypack_value_trait {
@@ -73,7 +74,7 @@ public:
   static void readbuf(const char*&v, const char* readfrom) {
     unsigned int sz;
     memcpy(&sz, readfrom, sizeof(unsigned int));
-    auto strbuf = new char[sz];
+    auto strbuf = (char*)malloc(sz);
     memcpy(strbuf, readfrom + sizeof(unsigned int), sz);
     v = strbuf;
   }
@@ -102,7 +103,7 @@ public:
   }
 
   char* pack() {
-    auto buf = new char[get_size()];
+    auto buf = (char*)malloc(get_size());
     writebuf(buf);
     return buf;
   }
@@ -113,7 +114,7 @@ public:
 
   char* pack_size_prefix() {
     auto sz = get_size();
-    auto buf = new char[sizeof(unsigned int) + sz];
+    auto buf = (char*)malloc((unsigned int) + sz);
     memcpy(buf, &sz, sizeof(unsigned int));
     writebuf(buf + sizeof(unsigned int));
     return buf;
