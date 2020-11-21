@@ -1,0 +1,30 @@
+#ifndef __new_
+#define __new_
+
+#include <bits/c++config.h>
+#include <exception>
+
+#pragma GCC visibility push(hidden)
+
+namespace std {
+  struct nothrow_t
+  {
+#if __cplusplus >= 201103L
+    explicit nothrow_t() = default;
+#endif
+  };
+  extern const nothrow_t nothrow;
+}
+
+void* operator new(std::size_t count, void* ptr);
+void* operator new[](std::size_t count, void* ptr);
+void* operator new(unsigned long count);
+void* operator new[](unsigned long count);
+void* operator new(unsigned long count, const std::nothrow_t& nothrow);
+void* operator new[](unsigned long count, const std::nothrow_t& nothrow);
+void operator delete(void* ptr) throw();
+void operator delete[](void* ptr) throw();
+
+#pragma GCC visibility pop
+
+#endif /* __new_ */

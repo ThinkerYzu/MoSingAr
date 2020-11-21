@@ -1,8 +1,8 @@
 
-CFLAGS := -Wall -Werror -fpic -fvisibility=hidden -fno-builtin -nostdlib
+CFLAGS := -Wall -Werror -fpic -fvisibility=hidden -fno-builtin -nostdlib -I./ -fno-builtin
 
 libtongdao_so_OBJS := bootstrap.o seccomp.o filter.o bridge.o \
-	syscall-trampo.o tinylibc.o sig-trampo.o
+	syscall-trampo.o tinylibc.o sig-trampo.o tinymalloc.o
 
 all:: libtongdao.so syscall-trampo.bin
 
@@ -31,6 +31,9 @@ bootstrap.o: bootstrap.cpp
 	$(CXX) $(CFLAGS) -c $<
 
 tinylibc.o: tinylibc.cpp
+	$(CXX) $(CFLAGS) -c $<
+
+tinymalloc.o: tinymalloc.cpp
 	$(CXX) $(CFLAGS) -c $<
 
 clean::

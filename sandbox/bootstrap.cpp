@@ -21,6 +21,7 @@ extern int init_seccomp();
 extern "C" {
 long (*td__syscall_trampo)(long, ...);
 extern void syscall_trampoline();
+extern void tinymalloc_init();
 }
 
 class bootstrap {
@@ -39,6 +40,7 @@ public:
     memcpy(ptr, (void*)syscall_trampoline, 4096);
     td__syscall_trampo = (long(*)(long, ...))ptr;
 
+    tinymalloc_init();
     init_seccomp();
   }
 };
