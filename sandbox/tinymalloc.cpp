@@ -2,7 +2,6 @@
  * vim: set ts=8 sts=2 et sw=2 tw=80:
  */
 #include <stdint.h>
-#include <assert.h>
 #include <sys/mman.h>
 #include <stdlib.h>
 
@@ -10,6 +9,8 @@
 
 void* operator new(std::size_t count, void* ptr);
 void* operator new[](std::size_t count, void* ptr);
+
+#define assert(x) do { if(!(x)) { abort(); } } while(0)
 
 
 struct chunkinfo_t {

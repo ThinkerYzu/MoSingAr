@@ -14,7 +14,7 @@
 #include <sys/mman.h>
 #include <string.h>
 
-#include <assert.h>
+#define assert(x) do { if (!(x)) { abort(); } } while(0)
 
 
 extern int init_seccomp();
