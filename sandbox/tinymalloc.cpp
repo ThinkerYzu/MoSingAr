@@ -5,13 +5,19 @@
 #include <sys/mman.h>
 #include <stdlib.h>
 
+#include <asm/unistd.h>
+#include <unistd.h>
+
 #include <new>
 
 void* operator new(std::size_t count, void* ptr);
 void* operator new[](std::size_t count, void* ptr);
 
-#define assert(x) do { if(!(x)) { abort(); } } while(0)
+#define assert(x) do { if(!(x)) { write(2, #x, sizeof(#x) - 1); abort(); } } while(0)
 
+extern "C" {
+extern long (*td__syscall_trampo)(long, ...);
+}
 
 struct chunkinfo_t {
   void* begin;
@@ -202,7 +208,7 @@ public:
   }
 
   chunkinfo_t* _alloc_chunk(uint32_t type) {
-    auto ptr = alloc_small(get_type(sizeof(chunkinfo_t)));
+    auto ptr = _alloc_small(get_type(sizeof(chunkinfo_t)));
     if (ptr == nullptr) {
       return nullptr;
     }
@@ -224,9 +230,7 @@ public:
     return chunk;
   }
 
-  void* alloc_small(uint32_t type) {
-    make_sure();
-
+  void* _alloc_small(uint32_t type) {
     // Find a chunk having free memory or create a new chunk.
     chunkinfo_t* chunk = nullptr;
     chunkinfo_t* prev = nullptr;
@@ -251,6 +255,11 @@ public:
     nfrees[type]--;
 
     return ptr;
+  }
+
+  void* alloc_small(uint32_t type) {
+    make_sure();
+    return _alloc_small(type);
   }
 
   void* alloc(uint32_t size) {
@@ -309,13 +318,15 @@ void tinymalloc_init() {
   static char buf[sizeof(mem_block_t)];
   assert(global_mem_block == nullptr);
 
-  auto mem = mmap(nullptr,
-                  1024 * 1024,
-                  PROT_READ | PROT_WRITE,
-                  MAP_PRIVATE | MAP_ANONYMOUS,
-                  -1,
-                  0);
+  auto mem = (void*)td__syscall_trampo(__NR_mmap,
+                                       nullptr,
+                                       1024 * 1024,
+                                       PROT_READ | PROT_WRITE,
+                                       MAP_PRIVATE | MAP_ANONYMOUS,
+                                       -1,
+                                       0);
   auto block = new(buf) mem_block_t(mem, 1024 * 1024);
+  block->init();
   global_mem_block = block;
 }
 
