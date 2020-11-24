@@ -7,6 +7,14 @@
 #include <sys/types.h>
 #include <sys/user.h>
 
+void mk_funcall_args(user_regs_struct& regs,
+                     unsigned long long arg1=0,
+                     unsigned long long arg2=0,
+                     unsigned long long arg3=0,
+                     unsigned long long arg4=0,
+                     unsigned long long arg5=0,
+                     unsigned long long arg6=0);
+
 long inject_text(pid_t, void*, void*, unsigned int);
 long read_text(pid_t, void*, void*, unsigned int);
 long ptrace_stop(pid_t);
@@ -14,14 +22,16 @@ long ptrace_cont(pid_t);
 long ptrace_getregs(pid_t, user_regs_struct&);
 long ptrace_setregs(pid_t, const user_regs_struct&);
 long inject_run_syscall(pid_t pid, int nr,
-                   unsigned long long arg1=0,
-                   unsigned long long arg2=0,
-                   unsigned long long arg3=0,
-                   unsigned long long arg4=0,
-                   unsigned long long arg5=0,
-                        unsigned long long arg6=0);
+                        unsigned long long arg1=0,
+                        unsigned long long arg2=0,
+                        unsigned long long arg3=0,
+                        unsigned long long arg4=0,
+                        unsigned long long arg5=0,
+                        unsigned long long arg6=0,
+                        user_regs_struct* saved_regs = nullptr);
 void* inject_mmap(pid_t pid, void* addr, size_t length,
-                  int prot, int flags, int fd, off_t offset);
+                  int prot, int flags, int fd, off_t offset,
+                  user_regs_struct* saved_regs = nullptr);
 
 
 #endif /* __ptracetools_h_ */
