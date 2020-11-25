@@ -11,6 +11,20 @@ extern "C" {
 extern long syscall_trampoline(long, ...);
 extern void sig_trampoline();
 
+void printptr(void* p) {
+  auto addr = (long)p;
+  char buf[19];
+  buf[0] = '0';
+  buf[1] = 'x';
+  buf[18] = '\n';
+  auto bidx = 2;
+  for (auto i = 60; i >= 0; i -= 4) {
+    auto v = 0xf & (addr >> i);
+    buf[bidx++] = v < 10 ? '0' + v : 'a' + (v - 10);
+  }
+  syscall_trampoline(__NR_write, 1, (long)buf, 19);
+}
+
 void*
 memcpy(void* dest, const void* src, size_t n) {
   auto d = (char*)dest;
@@ -114,6 +128,8 @@ abort() {
 
 void
 perror(const char* s) {
+  write(1, s, strlen(s));
+  write(1, " error\n", 7);
 }
 
 int seccomp(unsigned int operation, unsigned int flags, void *args) {

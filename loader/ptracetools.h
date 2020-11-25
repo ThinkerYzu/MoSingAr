@@ -32,6 +32,28 @@ long inject_run_syscall(pid_t pid, int nr,
 void* inject_mmap(pid_t pid, void* addr, size_t length,
                   int prot, int flags, int fd, off_t offset,
                   user_regs_struct* saved_regs = nullptr);
+long inject_run_funcall(pid_t pid,
+                        void* codesrc,
+                        int codesrclen,
+                        void* entry,
+                        unsigned long long arg1 = 0,
+                        unsigned long long arg2 = 0,
+                        unsigned long long arg3 = 0,
+                        unsigned long long arg4 = 0,
+                        unsigned long long arg5 = 0,
+                        unsigned long long arg6 = 0,
+                        user_regs_struct* saved_regs = nullptr);
+long inject_run_funcall_nosave(pid_t pid,
+                               void* codesrc,
+                               int codesrclen,
+                               void* entry,
+                               unsigned long long arg1 = 0,
+                               unsigned long long arg2 = 0,
+                               unsigned long long arg3 = 0,
+                               unsigned long long arg4 = 0,
+                               unsigned long long arg5 = 0,
+                               unsigned long long arg6 = 0,
+                               user_regs_struct* saved_regs = nullptr);
 
 
 #endif /* __ptracetools_h_ */

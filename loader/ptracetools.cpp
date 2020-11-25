@@ -84,6 +84,7 @@ read_text(pid_t pid, void* addr, void* ptr, unsigned int length) {
   for (unsigned int i = 0; i < cnt; i++) {
     auto r = ptrace(PTRACE_PEEKTEXT, pid, vaddr, nullptr);
     if (errno != 0) {
+      perror("prace");
       return -1;
     }
     *v++ = r;
@@ -161,30 +162,36 @@ inject_run_syscall(pid_t pid,
                    unsigned long long arg4,
                    unsigned long long arg5,
                    unsigned long long arg6,
-                   user_regs_struct* saved_regs) {
+                   user_regs_struct* _saved_regs) {
   long r;
 
   // Save registers
   user_regs_struct regs;
   user_regs_struct call_regs;
+  user_regs_struct* saved_regs = _saved_regs;
   if (saved_regs == nullptr) {
     r = ptrace_getregs(pid, regs);
     if (r < 0) {
       return r;
     }
-    call_regs = regs;
-  } else {
-    call_regs = *saved_regs;
+    saved_regs = &regs;
   }
+  call_regs = *saved_regs;
 
   // Save the existing code
   auto codesrclen = (char*)shellcode_syscall_end - (char*)shellcode_syscall;
   auto codelen = (codesrclen + 7) & ~0x7;
   std::unique_ptr<char> saved_code(new char[codelen]);
-  r = read_text(pid, (void*)regs.rip, saved_code.get(), codelen);
+  r = read_text(pid, (void*)call_regs.rip, saved_code.get(), codelen);
+  if (r < 0) {
+    return r;
+  }
 
   // Set registers for the syscall.
   mk_syscall_args(call_regs, nr, arg1, arg2, arg3, arg4, arg5, arg6);
+  call_regs.rsp -= 512;         /* Avoid to polute the current frame.
+                                 * Not very idea, but work.
+                                 */
   r = ptrace_setregs(pid, call_regs);
   if (r < 0) {
     return r;
@@ -193,7 +200,7 @@ inject_run_syscall(pid_t pid,
   // Inject the shell code
   std::unique_ptr<char> code(new char[codelen]);
   memcpy(code.get(), (void*)shellcode_syscall, codesrclen);
-  r = inject_text(pid, (void*)regs.rip, code.get(), codelen);
+  r = inject_text(pid, (void*)call_regs.rip, code.get(), codelen);
   if (r < 0) {
     return r;
   }
@@ -219,13 +226,13 @@ inject_run_syscall(pid_t pid,
   }
 
   // Restore code
-  r = inject_text(pid, (void*)regs.rip, saved_code.get(), codelen);
+  r = inject_text(pid, (void*)saved_regs->rip, saved_code.get(), codelen);
   if (r < 0) {
     return r;
   }
 
   // Restore registers
-  if (saved_regs == nullptr) {
+  if (_saved_regs == nullptr) {
     r = ptrace_setregs(pid, regs);
     if (r < 0) {
       return r;
@@ -246,40 +253,40 @@ inject_run_funcall(pid_t pid,
                    unsigned long long arg4,
                    unsigned long long arg5,
                    unsigned long long arg6,
-                   user_regs_struct* saved_regs) {
+                   user_regs_struct* _saved_regs) {
   long r;
 
   // Save registers
   user_regs_struct regs;
   user_regs_struct call_regs;
+  user_regs_struct* saved_regs = _saved_regs;
   if (saved_regs == nullptr) {
     r = ptrace_getregs(pid, regs);
     if (r < 0) {
       return r;
     }
-    call_regs = regs;
-  } else {
-    call_regs = *saved_regs;
+    saved_regs = &regs;
   }
+  call_regs = *saved_regs;
 
   // Save the existing code
   auto codelen = codesrclen;
   codelen = (codelen + 7) & ~0x7;
   std::unique_ptr<char> saved_code(new char[codelen]);
-  r = read_text(pid, (void*)regs.rip, saved_code.get(), codelen);
+  r = read_text(pid, (void*)call_regs.rip, saved_code.get(), codelen);
+
+  // Inject the shell code
+  std::unique_ptr<char> code(new char[codelen]);
+  memcpy(code.get(), codesrc, codesrclen);
+  r = inject_text(pid, (void*)call_regs.rip, code.get(), codelen);
+  if (r < 0) {
+    return r;
+  }
 
   // Set registers for the function call.
   mk_funcall_args(call_regs, arg1, arg2, arg3, arg4, arg5, arg6);
   call_regs.rip += (char*)entry - (char*)codesrc;
   r = ptrace_setregs(pid, call_regs);
-  if (r < 0) {
-    return r;
-  }
-
-  // Inject the shell code
-  std::unique_ptr<char> code(new char[codelen]);
-  memcpy(code.get(), codesrc, codesrclen);
-  r = inject_text(pid, (void*)regs.rip, code.get(), codelen);
   if (r < 0) {
     return r;
   }
@@ -305,7 +312,90 @@ inject_run_funcall(pid_t pid,
   }
 
   // Restore code
-  r = inject_text(pid, (void*)regs.rip, saved_code.get(), codelen);
+  r = inject_text(pid, (void*)saved_regs->rip, saved_code.get(), codelen);
+  if (r < 0) {
+    return r;
+  }
+
+  // Restore registers
+  if (_saved_regs == nullptr) {
+    r = ptrace_setregs(pid, regs);
+    if (r < 0) {
+      return r;
+    }
+  }
+
+  return call_regs.rax;
+}
+
+long
+inject_run_funcall_nosave(pid_t pid,
+                          void* codesrc,
+                          int codesrclen,
+                          void* entry,
+                          unsigned long long arg1,
+                          unsigned long long arg2,
+                          unsigned long long arg3,
+                          unsigned long long arg4,
+                          unsigned long long arg5,
+                          unsigned long long arg6,
+                          user_regs_struct* saved_regs) {
+  long r;
+
+  // Save registers
+  user_regs_struct regs;
+  user_regs_struct call_regs;
+  if (saved_regs == nullptr) {
+    r = ptrace_getregs(pid, regs);
+    if (r < 0) {
+      return r;
+    }
+    call_regs = regs;
+  } else {
+    call_regs = *saved_regs;
+  }
+
+  // Set registers for the function call.
+  mk_funcall_args(call_regs, arg1, arg2, arg3, arg4, arg5, arg6);
+  call_regs.rip += (char*)entry - (char*)codesrc;
+  r = ptrace_setregs(pid, call_regs);
+  if (r < 0) {
+    return r;
+  }
+
+  // Inject the shell code
+  auto codelen = codesrclen;
+  codelen = (codelen + 7) & ~0x7;
+  std::unique_ptr<char> code(new char[codelen]);
+  memcpy(code.get(), codesrc, codesrclen);
+  r = inject_text(pid, (void*)call_regs.rip, code.get(), codelen);
+  if (r < 0) {
+    return r;
+  }
+
+  call_regs.rip += 2;           // why? About CPU's design?
+  ptrace_setregs(pid, call_regs);
+  // Run the shell code
+  r = ptrace_cont(pid);
+  if (r < 0) {
+    return r;
+  }
+  int status = 0;
+  do {
+    r = waitpid(pid, &status, 0);
+    if (r < 0) {
+      perror("waitpid");
+      return r;
+    }
+    if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGSEGV) {
+      ptrace_getregs(pid, call_regs);
+      printf("SIGSEGV rip %llx\n", call_regs.rip);
+      return -1;
+    }
+  } while(!WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP);
+
+  // Get the return value
+  r = ptrace_getregs(pid, call_regs);
   if (r < 0) {
     return r;
   }

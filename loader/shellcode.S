@@ -15,3 +15,21 @@ shellcode_syscall:
         .global shellcode_syscall_end
         .type shellcode_syscall_end, @function
 shellcode_syscall_end:
+
+        .hidden shellcode_funcall_trap
+        .global shellcode_funcall_trap
+        .type shellcode_funcall_trap, @function
+        .align  8
+shellcode_funcall_trap:
+        call    *.L1(%rip)
+        int3                    /* trap */
+
+        .align  8
+.L1:
+        .quad  0                /* the entry point of the function */
+
+        .hidden shellcode_funcall_trap_end
+        .global shellcode_funcall_trap_end
+        .type shellcode_funcall_trap_end, @function
+shellcode_funcall_trap_end:
+
