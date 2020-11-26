@@ -41,7 +41,7 @@ movq %%rax, %0;"
   return r;
 }
 #else
-#error "Unknow platform"
+#error "Unknown platform"
 #endif
 
 long
