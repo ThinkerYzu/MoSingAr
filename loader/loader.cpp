@@ -14,6 +14,7 @@
 
 void loader_start() {}
 
+#ifdef __x86_64__
 static long
 _syscall(long nr,
         long arg1 = 0,
@@ -39,6 +40,9 @@ movq %%rax, %0;"
       );
   return r;
 }
+#else
+#error "Unknow platform"
+#endif
 
 long
 load_shared_object(const char* path, prog_header* headers, int header_num,
