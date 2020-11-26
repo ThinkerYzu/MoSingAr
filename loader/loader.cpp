@@ -15,7 +15,7 @@
 void loader_start() {}
 
 static long
-_syscall(int nr,
+_syscall(long nr,
         long arg1 = 0,
         long arg2 = 0,
         long arg3 = 0,
@@ -35,15 +35,16 @@ syscall; \
 movq %%rax, %0;"
       :"=r"(r)
       :"m"(nr), "m"(arg1), "m"(arg2), "m"(arg3), "m"(arg4), "m"(arg5), "m"(arg6)
-      :"%rax", "%rdi", "%rsi", "%rdx", "%r10", "%r8", "%r9"
+      :"rax", "rdi", "rsi", "rdx", "r10", "r8", "r9"
       );
   return r;
 }
 
 long
 load_shared_object(const char* path, prog_header* headers, int header_num,
-                   void (**init_array)(), int init_num,
-                   void** rela) {
+                   void (**init_array)(),
+                   void** rela,
+                   long flags) {
   auto fd = _syscall(__NR_open, (long)path, (long)O_RDONLY);
   if (fd < 0) {
     return fd;
@@ -101,9 +102,11 @@ load_shared_object(const char* path, prog_header* headers, int header_num,
   }
 
   // Call init functions
-  for (i = 0; i < init_num; i++) {
-    auto init_func = (void(*)())((char*)first_map + (long)init_array[i]);
+  auto init_p = init_array;
+  while (*init_p) {
+    auto init_func = (void(*)())((char*)first_map + (long)*init_p);
     init_func();
+    init_p++;
   }
 
   return 0;

@@ -355,14 +355,6 @@ inject_run_funcall_nosave(pid_t pid,
     call_regs = *saved_regs;
   }
 
-  // Set registers for the function call.
-  mk_funcall_args(call_regs, arg1, arg2, arg3, arg4, arg5, arg6);
-  call_regs.rip += (char*)entry - (char*)codesrc;
-  r = ptrace_setregs(pid, call_regs);
-  if (r < 0) {
-    return r;
-  }
-
   // Inject the shell code
   auto codelen = codesrclen;
   codelen = (codelen + 7) & ~0x7;
@@ -373,8 +365,14 @@ inject_run_funcall_nosave(pid_t pid,
     return r;
   }
 
-  call_regs.rip += 2;           // why? About CPU's design?
-  ptrace_setregs(pid, call_regs);
+  // Set registers for the function call.
+  mk_funcall_args(call_regs, arg1, arg2, arg3, arg4, arg5, arg6);
+  call_regs.rip += (char*)entry - (char*)codesrc;
+  r = ptrace_setregs(pid, call_regs);
+  if (r < 0) {
+    return r;
+  }
+
   // Run the shell code
   r = ptrace_cont(pid);
   if (r < 0) {

@@ -48,7 +48,6 @@ struct trapped_shellcode {
   int header_num;
 
   void (**init_funcs)();
-  int init_num;
 
   void** rela;
 
@@ -343,10 +342,12 @@ prepare_shellcode() {
 
     assert(init_array_bytes % sizeof(void*) == 0);
     init_array_num = init_array_bytes / sizeof(void*);
-    init_array = std::unique_ptr<void *[]>(new void*[init_array_num]);
+    init_array = std::unique_ptr<void *[]>(new void*[init_array_num + 1]);
 
     _ENull(lseek, solib.get_fd(), init_array_offset, SEEK_SET);
     _ENull(read, solib.get_fd(), init_array.get(), init_array_bytes);
+    init_array[init_array_num] = nullptr;
+    init_array_bytes += sizeof(void*);
 
     break;
   }
@@ -428,7 +429,6 @@ prepare_shellcode() {
 
   // The init functions
   shellcode->init_funcs = (void (**)())(code + pos);
-  shellcode->init_num = init_array_num;
   memcpy(code + pos, init_array.get(), init_array_bytes);
   pos += init_array_bytes;
   ROUND8(pos);
@@ -437,6 +437,7 @@ prepare_shellcode() {
   shellcode->rela = (void **)(code + pos);
   memcpy(code + pos, rela.get(), rela_bytes);
   pos += rela_bytes;
+  ROUND8(pos);
 
   // The loader function
   auto entry = code + pos + ((char*)load_shared_object - (char*)loader_start);
@@ -466,7 +467,7 @@ takeoff(pid_t pid) {
   auto request_size = (shellcode->size + 16384 + 4095) & ~4095;
   auto addr = inject_mmap(pid, nullptr, request_size,
                           PROT_EXEC | PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_GROWSDOWN,
+                          MAP_PRIVATE | MAP_ANONYMOUS,
                           -1,
                           0,
                           &saved_regs);
@@ -481,13 +482,13 @@ takeoff(pid_t pid) {
   auto r = inject_run_funcall_nosave(pid,
                                      shellcode->code,
                                      shellcode->size,
-                                     shellcode->code,
+                                     (char*)shellcode->code + 2, // skip 2 nops
                                      (unsigned long long)shellcode->so_path,
                                      (unsigned long long)shellcode->headers,
                                      shellcode->header_num,
                                      (unsigned long long)shellcode->init_funcs,
-                                     shellcode->init_num,
                                      (unsigned long long)shellcode->rela,
+                                     0,
                                      &regs);
 
   // Restore registers
@@ -503,7 +504,7 @@ takeoff(pid_t pid) {
 
 void
 child() {
-  for (int i = 0; i < 60; i++) {
+  for (int i = 0; i < 35; i++) {
     printf("child %d\n", i);
     sleep(1);
   }

@@ -21,6 +21,16 @@ shellcode_syscall_end:
         .type shellcode_funcall_trap, @function
         .align  8
 shellcode_funcall_trap:
+        /* Always skip 2 nop to avoid alignment with the page, or
+	 * it may cause segfault.
+         *
+         * For some reason, it may cause segfault if first instruction
+	 * is at the first byte of a map, the bytes before the map is
+	 * not mapped yet.
+         */
+        nop
+        nop
+
         call    *.L1(%rip)
         int3                    /* trap */
 

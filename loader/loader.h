@@ -15,8 +15,9 @@ extern void loader_start();
 extern long load_shared_object(const char* path,
                                prog_header* headers,
                                int header_num,
-                               void (**init_array)(), int init_num,
-                               void** rela);
+                               void (**init_array)(),
+                               void** rela,
+                               long flags);
 extern void loader_end();
 
 #endif /* __loader_h_ */
