@@ -13,7 +13,7 @@
 void* operator new(std::size_t count, void* ptr);
 void* operator new[](std::size_t count, void* ptr);
 
-#define assert(x) do { if(!(x)) { write(2, #x, sizeof(#x) - 1); abort(); } } while(0)
+#define assert(x) do { if(!(x)) { write(2, "\n", 1); write(2, #x, sizeof(#x) - 1); write(2, "\n", 1); abort(); } } while(0)
 
 extern "C" {
 extern long (*td__syscall_trampo)(long, ...);

@@ -508,6 +508,9 @@ child() {
     printf("child %d\n", i);
     sleep(1);
   }
+  open("/dev/null", O_RDONLY);
+  sleep(1);
+  write(2, "\nExit child\n", 12);
 }
 
 void

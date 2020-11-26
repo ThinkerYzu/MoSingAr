@@ -123,6 +123,9 @@ prctl(int option, unsigned long arg2, unsigned long arg3,
 
 void
 abort() {
+#ifdef DEBUG_TRAP
+  asm("int3;");
+#endif
   syscall_trampoline(__NR_exit, 255);
 }
 
