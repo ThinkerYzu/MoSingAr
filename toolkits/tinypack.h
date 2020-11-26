@@ -57,7 +57,7 @@ public:
   static void writebuf(const char*v, char* writeto) {
     unsigned int sz = strlen(v) + 1;
     memcpy(writeto, &sz, sizeof(unsigned int));
-    memcpy(writeto + sizeof(unsigned int), v, size(v));
+    memcpy(writeto + sizeof(unsigned int), v, sz);
   }
   static int rsize(const char* readfrom, unsigned int size) {
     if (size < sizeof(unsigned int)) {
