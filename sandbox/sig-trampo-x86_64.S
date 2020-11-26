@@ -8,10 +8,11 @@
  * man page of sigaction().
  * https://github.com/lattera/glibc/blob/master/sysdeps/unix/sysv/linux/x86_64/sigaction.c
  */
+#define __NR_rt_sigreturn 15
         .text
         .hidden sig_trampoline
         .global sig_trampoline
         .type sig_trampoline, @function
 sig_trampoline:
-        mov     $13, %rax
+        mov     $__NR_rt_sigreturn, %rax
         syscall
