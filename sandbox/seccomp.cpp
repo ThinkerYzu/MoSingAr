@@ -174,6 +174,10 @@ install_sigsys() {
   }
 }
 
+extern "C" {
+int seccomp_filter_installed = 0;
+}
+
 /**
  * The BPF filter will check all syscalls, some of calls are allowed
  * by return SECCOMP_RET_ALLOW. Other calls are trapped by return
@@ -187,6 +191,9 @@ install_sigsys() {
 int
 init_seccomp() {
   install_sigsys();
-  install_filter();
+  if (seccomp_filter_installed == 0) {
+    install_filter();
+    seccomp_filter_installed = 1;
+  }
   return 0;
 }
