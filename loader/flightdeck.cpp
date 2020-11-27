@@ -96,7 +96,9 @@ public:
     , dyns(nullptr)
     , dyn_num(0)
     , shdrs(nullptr)
-    , shstrtab(nullptr) {
+    , shstrtab(nullptr)
+    , dynsym(nullptr)
+    , dynstr(nullptr) {
   }
   ~ElfParser() {
     if (fd >= 0) {
@@ -113,6 +115,12 @@ public:
     }
     if (shstrtab) {
       delete shstrtab;
+    }
+    if (dynsym) {
+      delete dynsym;
+    }
+    if (dynstr) {
+      delete dynstr;
     }
   }
 
@@ -203,7 +211,7 @@ public:
     return 0;
   }
 
-  int get_sect_header_num() const {
+  unsigned int get_sect_header_num() const {
     assert(hdr_valid);
     return hdr.e_shnum;
   }
@@ -227,12 +235,91 @@ public:
     return 0;
   }
 
-  const char* get_shstrtab() {
+  const char* get_shstrtab() const {
     return shstrtab;
   }
 
-  unsigned int get_shstrtab_size() {
+  unsigned int get_shstrtab_size() const {
     return shstrtab_bytes;
+  }
+
+  const char* get_sect_name(unsigned int ndx) const {
+    assert(ndx < get_sect_header_num());
+    auto shdr = get_sect_headers() + ndx;
+    assert(shdr->sh_name < get_shstrtab_size());
+    return get_shstrtab() + shdr->sh_name;
+  }
+
+  int find_section(const char* name) const {
+    for (unsigned int i = 0; i < get_sect_header_num(); i++) {
+      if (strcmp(name, get_sect_name(i)) == 0) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  int parse_dynsym() {
+    assert(hdr_valid);
+    assert(shdrs);
+    assert(shstrtab);
+
+    auto dynsym_ndx = find_section(".dynsym");
+    assert(dynsym_ndx >= 0);
+    auto shdr = get_sect_headers() + dynsym_ndx;
+    assert(shdr->sh_entsize == sizeof(Elf64_Sym));
+    dynsym_num = shdr->sh_size / shdr->sh_entsize;
+    dynsym = new Elf64_Sym[dynsym_num];
+    _E(lseek, fd, shdr->sh_offset, SEEK_SET);
+    _E(read, fd, dynsym, shdr->sh_size);
+    return 0;
+  }
+
+  Elf64_Sym* get_dynsym() const {
+    return dynsym;
+  }
+
+  unsigned int get_dynsym_num() const {
+    return dynsym_num;
+  }
+
+  int parse_dynstr() {
+    assert(hdr_valid);
+    assert(shdrs);
+    assert(shstrtab);
+
+    auto dynstr_ndx = find_section(".dynstr");
+    assert(dynstr_ndx >= 0);
+    auto shdr = get_sect_headers() + dynstr_ndx;
+    dynstr = new char[shdr->sh_size];
+    _E(lseek, fd, shdr->sh_offset, SEEK_SET);
+    _E(read, fd, dynstr, shdr->sh_size);
+    dynstr_bytes = shdr->sh_size;
+    return 0;
+  }
+
+  const char* get_dynstr() const {
+    return dynstr;
+  }
+
+  unsigned int get_dynstr_size() const {
+    return dynstr_bytes;
+  }
+
+  const char* get_dynsym_name(unsigned int ndx) const {
+    assert(ndx < get_dynsym_num());
+    auto sym = get_dynsym() + ndx;
+    assert(sym->st_name < get_dynstr_size());
+    return get_dynstr() + sym->st_name;
+  }
+
+  int find_dynsym(const char* name) {
+    for (unsigned int i = 0; i < get_dynsym_num(); i++) {
+      if (strcmp(name, get_dynsym_name(i)) == 0) {
+        return i;
+      }
+    }
+    return -1;
   }
 
 private:
@@ -248,6 +335,11 @@ private:
 
   char* shstrtab;
   unsigned int shstrtab_bytes;
+
+  Elf64_Sym* dynsym;
+  int dynsym_num;
+  char* dynstr;
+  int dynstr_bytes;
 };
 
 const char* libtongdao_so_path = "../sandbox/libtongdao.so";
@@ -291,6 +383,8 @@ prepare_shellcode() {
   solib.parse_dyanmic();
   solib.parse_sect_headers();
   solib.parse_shstrtab();
+  solib.parse_dynsym();
+  solib.parse_dynstr();
 
   // Parse program headers
   int load_num = 0;
@@ -369,16 +463,30 @@ prepare_shellcode() {
   assert(rela_entsize == sizeof(Elf64_Rela));
   assert(rela_elf_bytes % rela_entsize == 0);
   unsigned int rela_num = rela_elf_bytes / rela_entsize;
-  std::unique_ptr<void *[]> rela(new void*[rela_num + 1]);
+  std::unique_ptr<void *[]> rela(new void*[rela_num * 2 + 1]);
   Elf64_Rela rela_ent;
   _ENull(lseek, solib.get_fd(), rela_offset, SEEK_SET);
   for (unsigned int i = 0; i < rela_num; i++) {
     _ENull(read, solib.get_fd(), &rela_ent, rela_entsize);
+    auto rela_type = 0xffffffff & rela_ent.r_info;
     // Assume only this type of entries are there.
-    assert(rela_ent.r_info == R_X86_64_RELATIVE);
-    rela[i] = (void*)rela_ent.r_offset;
+    assert(rela_type == R_X86_64_RELATIVE ||
+           rela_type == R_X86_64_GLOB_DAT);
+    rela[i * 2] = (void*)rela_ent.r_offset;
+    switch (rela_type) {
+    case R_X86_64_RELATIVE:
+      rela[i * 2 + 1] = (void*)rela_ent.r_addend;
+      printf("rela addend %lx\n", rela_ent.r_addend);
+      break;
+
+    case R_X86_64_GLOB_DAT:
+      auto sym = solib.get_dynsym() + (rela_ent.r_info >> 32);
+      rela[i * 2 + 1] = (void*)sym->st_value;
+      printf("rela addend %lx\n", sym->st_value);
+      break;
+    }
   }
-  rela[rela_num] = nullptr;
+  rela[rela_num * 2] = nullptr;
 
   auto funcall_trap_bytes =
     (char*)shellcode_funcall_trap_end - (char*)shellcode_funcall_trap;
@@ -396,7 +504,7 @@ prepare_shellcode() {
   ROUND8(shellcode->size);
   shellcode->size += init_array_bytes;
   ROUND8(shellcode->size);
-  auto rela_bytes = sizeof(void*) * (rela_num + 1);
+  auto rela_bytes = sizeof(void*) * (rela_num * 2 + 1);
   shellcode->size += rela_bytes;
   ROUND8(shellcode->size);
   shellcode->size += loader_bytes;

@@ -95,9 +95,11 @@ load_shared_object(const char* path, prog_header* headers, int header_num,
 
   auto rela_p = rela;
   while (*rela_p) {
-    auto pptr = (void**)((char*)first_map + (long)*rela_p);
-    *pptr = (void*)((char*)first_map + (long)*pptr);
-    rela_p++;
+    auto offset = (long)rela_p[0];
+    auto addend = (long)rela_p[1];
+    auto pptr = (void**)((char*)first_map + offset);
+    *pptr = (void*)((char*)first_map + addend);
+    rela_p += 2;
   }
 
   r = _syscall(__NR_close, fd);
