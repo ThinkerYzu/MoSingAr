@@ -373,7 +373,7 @@ const char* libtongdao_so_path = "../sandbox/libtongdao.so";
  * pass the arguments.
  */
 trapped_shellcode*
-prepare_shellcode() {
+prepare_shellcode(bool skip_filter) {
   auto so_path = libtongdao_so_path;
 
   ElfParser solib(so_path);
@@ -463,10 +463,11 @@ prepare_shellcode() {
   assert(rela_entsize == sizeof(Elf64_Rela));
   assert(rela_elf_bytes % rela_entsize == 0);
   unsigned int rela_num = rela_elf_bytes / rela_entsize;
+  rela_num++;                   // for global_flags in bootstrap.cpp
   std::unique_ptr<void *[]> rela(new void*[rela_num * 2 + 1]);
   Elf64_Rela rela_ent;
   _ENull(lseek, solib.get_fd(), rela_offset, SEEK_SET);
-  for (unsigned int i = 0; i < rela_num; i++) {
+  for (unsigned int i = 0; i < (rela_num - 1); i++) {
     _ENull(read, solib.get_fd(), &rela_ent, rela_entsize);
     auto rela_type = 0xffffffff & rela_ent.r_info;
     // Assume only this type of entries are there.
@@ -476,16 +477,28 @@ prepare_shellcode() {
     switch (rela_type) {
     case R_X86_64_RELATIVE:
       rela[i * 2 + 1] = (void*)rela_ent.r_addend;
-      printf("rela addend %lx\n", rela_ent.r_addend);
       break;
 
     case R_X86_64_GLOB_DAT:
       auto sym = solib.get_dynsym() + (rela_ent.r_info >> 32);
       rela[i * 2 + 1] = (void*)sym->st_value;
-      printf("rela addend %lx\n", sym->st_value);
       break;
     }
   }
+  // By hacking addend of a relocation, we can change the value of a
+  // global variable, global_flags is our target.  However, the value
+  // will be relocated with the real address of the variable.  By
+  // subtracting the value of the variable with the address of itself,
+  // the real value can be recovered.
+  unsigned long int global_flags = 0;
+  if (skip_filter) {
+    global_flags |= 0x1;
+  }
+  auto global_flags_ndx = solib.find_dynsym("global_flags");
+  assert(global_flags_ndx >= 0);
+  auto global_flags_sym = solib.get_dynsym() + global_flags_ndx;
+  rela[rela_num * 2 - 2] = (void*)global_flags_sym->st_value;
+  rela[rela_num * 2 - 1] = (void*)(global_flags + global_flags_sym->st_value);
   rela[rela_num * 2] = nullptr;
 
   auto funcall_trap_bytes =
@@ -567,7 +580,7 @@ prepare_shellcode() {
  */
 long
 takeoff(pid_t pid) {
-  std::unique_ptr<trapped_shellcode> shellcode(prepare_shellcode());
+  std::unique_ptr<trapped_shellcode> shellcode(prepare_shellcode(false));
 
   user_regs_struct saved_regs;
   ptrace_getregs(pid, saved_regs);

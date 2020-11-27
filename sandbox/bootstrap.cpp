@@ -22,11 +22,23 @@ extern "C" {
 long (*td__syscall_trampo)(long, ...);
 extern void syscall_trampoline();
 extern void tinymalloc_init();
+
+extern int seccomp_filter_installed;
+
+unsigned long int global_flags __attribute__((visibility("default"))) = 0;
 }
 
 class bootstrap {
 public:
   bootstrap() {
+    // Neutralize the effects caused by the relocation.
+    // Check the comment in the body of prepare_shellcode().
+    global_flags -= (unsigned long int)&global_flags;
+
+    if (global_flags & 0x1) {
+      seccomp_filter_installed = 1;
+    }
+
     // Setup the trampoline, the filter will always allow trampoline's
     // request.
     void* ptr = mmap((void*)TRAMPOLINE_ADDR,
