@@ -25,7 +25,7 @@ extern void tinymalloc_init();
 
 extern int seccomp_filter_installed;
 
-unsigned long int global_flags __attribute__((visibility("default"))) = 0;
+unsigned long int global_flags __attribute__((visibility("default"))) = (unsigned long int)&global_flags;
 }
 
 class bootstrap {

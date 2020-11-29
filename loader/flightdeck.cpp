@@ -472,7 +472,8 @@ prepare_shellcode(bool skip_filter) {
     auto rela_type = 0xffffffff & rela_ent.r_info;
     // Assume only this type of entries are there.
     assert(rela_type == R_X86_64_RELATIVE ||
-           rela_type == R_X86_64_GLOB_DAT);
+           rela_type == R_X86_64_GLOB_DAT ||
+           rela_type == R_X86_64_64);
     rela[i * 2] = (void*)rela_ent.r_offset;
     switch (rela_type) {
     case R_X86_64_RELATIVE:
@@ -480,6 +481,7 @@ prepare_shellcode(bool skip_filter) {
       break;
 
     case R_X86_64_GLOB_DAT:
+    case R_X86_64_64:
       auto sym = solib.get_dynsym() + (rela_ent.r_info >> 32);
       rela[i * 2 + 1] = (void*)sym->st_value;
       break;
