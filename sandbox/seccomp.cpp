@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <signal.h>
 #include <asm/unistd.h>
+#include <string.h>
 
 #include <sys/prctl.h>
 
@@ -165,9 +166,9 @@ sigsys(int nr, siginfo_t *info, void* void_context) {
 void
 install_seccomp_sigsys() {
   struct sigaction act;
+  bzero(&act, sizeof(act));
   act.sa_sigaction = &sigsys;
   act.sa_flags = SA_SIGINFO;
-  sigemptyset(&act.sa_mask);
   int r = sigaction(SIGSYS, &act, nullptr);
   if (r < 0) {
     perror("sigaction");

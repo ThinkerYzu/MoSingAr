@@ -181,4 +181,11 @@ int sendmsg(int sockfd, const struct msghdr *msg, int flags) {
   return r;
 }
 
+void
+bzero(void* s, ssize_t n) {
+  auto p = (char*)s;
+  for (int i = 0; i < n; i++) {
+    *p++ = 0;
+  }
+}
 }
