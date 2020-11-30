@@ -56,6 +56,7 @@ public:
 
 private:
   bool handle_carrier_msg();
+  bool handle_scout_msg(int sock);
 
   bool stopping_message;
   int efd;

@@ -35,11 +35,11 @@ main(int argc, char * const * argv) {
   }
 
   scout sct1;
-  sct1.connect_cmdcenter();
+  sct1.establish_cc_channel();
   scout sct2;
-  sct2.connect_cmdcenter();
+  sct2.establish_cc_channel();
   scout sct3;
-  sct3.connect_cmdcenter();
+  sct3.establish_cc_channel();
 
   cc.handle_message();
   cc.handle_message();

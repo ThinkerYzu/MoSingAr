@@ -42,30 +42,6 @@ cmdcenter::init() {
 }
 
 bool
-cmdcenter::handle_carrier_msg() {
-  char data_buf[16];
-  char cmsg_buf[max_cmsg_buf];
-  iovec vec = { data_buf, 16 };
-  msghdr msg = { nullptr, 0, &vec, 1, cmsg_buf, max_cmsg_buf, 0 };
-  auto bytes = recvmsg(carrierfd, &msg, MSG_DONTWAIT);
-  assert(bytes == sizeof(int));
-  int cmd = *(int*)data_buf;
-  if (cmd == SCOUT_CONNECT_CMD) {
-    auto cmsg = CMSG_FIRSTHDR(&msg);
-    assert(cmsg != nullptr);
-    assert(cmsg->cmsg_level == SOL_SOCKET);
-    assert(cmsg->cmsg_type == SCM_RIGHTS);
-    assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
-    int sock = *(int*)CMSG_DATA(cmsg);
-    add_scout(sock);
-  } else if (cmd == STOP_MSG_LOOP_CMD) {
-    stopping_message = true;
-  }
-
-  return true;
-}
-
-bool
 cmdcenter::handle_message() {
   epoll_event events[max_events];
 
@@ -86,6 +62,8 @@ cmdcenter::handle_message() {
         if (!r) {
           return r;
         }
+      } else {
+        handle_scout_msg(sock);
       }
     }
   }
@@ -140,4 +118,33 @@ void
 cmdcenter::stop_msg_loop() {
   int cmd = STOP_MSG_LOOP_CMD;
   send(CARRIER_SOCK, &cmd, sizeof(cmd), 0);
+}
+
+bool
+cmdcenter::handle_carrier_msg() {
+  char data_buf[16];
+  char cmsg_buf[max_cmsg_buf];
+  iovec vec = { data_buf, 16 };
+  msghdr msg = { nullptr, 0, &vec, 1, cmsg_buf, max_cmsg_buf, 0 };
+  auto bytes = recvmsg(carrierfd, &msg, MSG_DONTWAIT);
+  assert(bytes == sizeof(int));
+  int cmd = *(int*)data_buf;
+  if (cmd == SCOUT_CONNECT_CMD) {
+    auto cmsg = CMSG_FIRSTHDR(&msg);
+    assert(cmsg != nullptr);
+    assert(cmsg->cmsg_level == SOL_SOCKET);
+    assert(cmsg->cmsg_type == SCM_RIGHTS);
+    assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
+    int sock = *(int*)CMSG_DATA(cmsg);
+    add_scout(sock);
+  } else if (cmd == STOP_MSG_LOOP_CMD) {
+    stopping_message = true;
+  }
+
+  return true;
+}
+
+bool
+cmdcenter::handle_scout_msg(int sock) {
+  return false;
 }

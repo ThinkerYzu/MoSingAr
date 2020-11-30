@@ -2,7 +2,7 @@ CFLAGS:= -fpic -Wall -Werror
 BINS := test_ptracetools test_flightdeck
 LIBS := libloader.so
 
-libloader_so_OBJS := ptracetools.o shellcode.o loader.o flightdeck.o cmdcenter.o scout.o
+libloader_so_OBJS := ptracetools.o shellcode.o loader.o flightdeck.o cmdcenter.o
 
 all:: $(BINS) $(LIBS)
 
@@ -24,14 +24,13 @@ flightdeck.o: flightdeck.cpp
 cmdcenter.o: cmdcenter.cpp cmdcenter.h
 	$(CXX) $(CFLAGS) -c $<
 
-scout.o: scout.cpp scout.h cmdcenter.h
-	$(CXX) $(CFLAGS) -c $<
-
 test_flightdeck: flightdeck.cpp ptracetools.o shellcode.o loader.o
 	$(CXX) -DTEST -o $@ $< ptracetools.o shellcode.o loader.o
 
-test:: test_ptracetools
+test:: test_ptracetools test_flightdeck
 	./test_ptracetools
+	@echo
+	../sandbox/tests/fake_cc ./test_flightdeck
 
 test_ptracetools: ptracetools.cpp shellcode.S
 	$(CXX) -o $@ -DTEST ptracetools.cpp shellcode.S

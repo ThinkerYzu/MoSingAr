@@ -162,8 +162,8 @@ sigsys(int nr, siginfo_t *info, void* void_context) {
   handle_syscall(info, ctx);
 }
 
-static void
-install_sigsys() {
+void
+install_seccomp_sigsys() {
   struct sigaction act;
   act.sa_sigaction = &sigsys;
   act.sa_flags = SA_SIGINFO | SA_NODEFER;
@@ -172,10 +172,6 @@ install_sigsys() {
     perror("sigaction");
     abort();
   }
-}
-
-extern "C" {
-int seccomp_filter_installed = 0;
 }
 
 /**
@@ -188,12 +184,7 @@ int seccomp_filter_installed = 0;
  * SIGSYS, it handle the syscall by changing registers or memory with
  * the information coming along with siginfo_t and ucontext.
  */
-int
-init_seccomp() {
-  install_sigsys();
-  if (seccomp_filter_installed == 0) {
-    install_filter();
-    seccomp_filter_installed = 1;
-  }
-  return 0;
+void
+install_seccomp_filter() {
+  install_filter();
 }

@@ -1,2 +1,2 @@
 LD_PRELOAD=../libtongdao.so
-exec $1
+exec ./fake_cc /usr/bin/env $1

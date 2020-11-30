@@ -1,32 +1,23 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: set ts=8 sts=2 et sw=2 tw=80:
  */
-#include "bridge.h"
+#include "scout.h"
 
-#include <stdio.h>
+#include "new"
+
 #include <stdlib.h>
-#include <unistd.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <sys/mman.h>
-#include <string.h>
 
 #define assert(x) do { if (!(x)) { abort(); } } while(0)
 
 
-extern int init_seccomp();
 extern "C" {
-long (*td__syscall_trampo)(long, ...);
-extern void syscall_trampoline();
 extern void tinymalloc_init();
-
-extern int seccomp_filter_installed;
 
 unsigned long int global_flags __attribute__((visibility("default"))) = (unsigned long int)&global_flags;
 }
+
+#define FLAG_FILTER_INSTALLED 0x1
+#define FLAG_CC_COMM_READY 0x2
 
 class bootstrap {
 public:
@@ -35,26 +26,29 @@ public:
     // Check the comment in the body of prepare_shellcode().
     global_flags -= (unsigned long int)&global_flags;
 
-    if (global_flags & 0x1) {
-      seccomp_filter_installed = 1;
+    // Use a buf since tinymalloc is not ready yet.
+    sct = new((void*)sct_buf) scout();
+
+    auto syscall_r = sct->install_syscall_trampo();
+    assert(syscall_r);
+
+    if (!(global_flags & FLAG_CC_COMM_READY)) {
+      sct->establish_cc_channel();
     }
 
-    // Setup the trampoline, the filter will always allow trampoline's
-    // request.
-    void* ptr = mmap((void*)TRAMPOLINE_ADDR,
-                     4096,
-                     PROT_READ | PROT_WRITE | PROT_EXEC,
-                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
-                     -1,
-                     0);
-    assert(ptr != nullptr);
-    assert(ptr == (void*)TRAMPOLINE_ADDR);
-    memcpy(ptr, (void*)syscall_trampoline, 4096);
-    td__syscall_trampo = (long(*)(long, ...))ptr;
-
     tinymalloc_init();
-    init_seccomp();
+
+    auto sigsys_r = sct->install_sigsys();
+    assert(sigsys_r);
+    if (!(global_flags & FLAG_FILTER_INSTALLED)) {
+      auto filter_r = sct->install_seccomp_filter();
+      assert(filter_r);
+    }
   }
+
+private:
+  scout *sct;
+  char sct_buf[sizeof(scout)];
 };
 
 static bootstrap _bootstrap;

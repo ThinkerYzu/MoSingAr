@@ -146,4 +146,39 @@ int seccomp(unsigned int operation, unsigned int flags, void *args) {
   return r;
 }
 
+int close(int fd) {
+  auto r = syscall_trampoline(__NR_close, fd);
+#ifndef NO_ERRNO
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+#endif
+  return r;
+}
+
+int socketpair(int domain, int type, int protocol, int sv[2]) {
+  auto r = syscall_trampoline(__NR_socketpair, (long)domain, (long)type, (long)protocol, (long)sv);
+#ifndef NO_ERRNO
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+#endif
+  return r;
+}
+
+struct msghdr;
+
+int sendmsg(int sockfd, const struct msghdr *msg, int flags) {
+  auto r = syscall_trampoline(__NR_sendmsg, (long)sockfd, (long)msg, (long)flags);
+#ifndef NO_ERRNO
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+#endif
+  return r;
+}
+
 }
