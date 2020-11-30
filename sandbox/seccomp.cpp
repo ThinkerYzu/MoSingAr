@@ -166,7 +166,8 @@ void
 install_seccomp_sigsys() {
   struct sigaction act;
   act.sa_sigaction = &sigsys;
-  act.sa_flags = SA_SIGINFO | SA_NODEFER;
+  act.sa_flags = SA_SIGINFO;
+  sigemptyset(&act.sa_mask);
   int r = sigaction(SIGSYS, &act, nullptr);
   if (r < 0) {
     perror("sigaction");
