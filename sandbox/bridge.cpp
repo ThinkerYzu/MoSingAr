@@ -2,7 +2,7 @@
  * vim: set ts=8 sts=2 et sw=2 tw=80:
  */
 #include "bridge.h"
-#include "bridge_common.h"
+#include "scout.h"
 #include "tinypack.h"
 
 #include <asm/unistd.h>
@@ -21,7 +21,7 @@ extern long (*td__syscall_trampo)(long, ...);
 
 int sandbox_bridge::send_open(const char* path, int flags, mode_t mode) {
   auto pack = tinypacker()
-    .field(bridge::cmd_open)
+    .field(scout::cmd_open)
     .field(path)
     .field(flags)
     .field(mode);
@@ -33,7 +33,7 @@ int sandbox_bridge::send_open(const char* path, int flags, mode_t mode) {
 
 int sandbox_bridge::send_openat(int dirfd, const char* path, int flags, mode_t mode) {
   auto pack = tinypacker()
-    .field(bridge::cmd_openat)
+    .field(scout::cmd_openat)
     .field(dirfd)
     .field(path)
     .field(flags)
@@ -56,7 +56,7 @@ int sandbox_bridge::send_dup2(int oldfd, int newfd) {
 
 int sandbox_bridge::send_access(const char* path, int mode) {
   auto pack = tinypacker()
-    .field(bridge::cmd_access)
+    .field(scout::cmd_access)
     .field(path)
     .field(mode);
   auto buf = pack.pack_size_prefix();
@@ -67,7 +67,7 @@ int sandbox_bridge::send_access(const char* path, int mode) {
 
 int sandbox_bridge::send_fstat(int fd, struct stat* statbuf) {
   auto pack = tinypacker()
-    .field(bridge::cmd_fstat)
+    .field(scout::cmd_fstat)
     .field(fd)
     .field(statbuf);
   auto buf = pack.pack_size_prefix();
@@ -78,7 +78,7 @@ int sandbox_bridge::send_fstat(int fd, struct stat* statbuf) {
 
 int sandbox_bridge::send_stat(const char* path, struct stat* statbuf) {
   auto pack = tinypacker()
-    .field(bridge::cmd_stat)
+    .field(scout::cmd_stat)
     .field(path)
     .field(statbuf);
   auto buf = pack.pack_size_prefix();
@@ -89,7 +89,7 @@ int sandbox_bridge::send_stat(const char* path, struct stat* statbuf) {
 
 int sandbox_bridge::send_lstat(const char* path, struct stat* statbuf) {
   auto pack = tinypacker()
-    .field(bridge::cmd_lstat)
+    .field(scout::cmd_lstat)
     .field(path)
     .field(statbuf);
   auto buf = pack.pack_size_prefix();
@@ -114,7 +114,7 @@ int sandbox_bridge::send_execve(const char* filename, char*const* argv, char*con
 
 size_t sandbox_bridge::send_readlink(const char* path, char* _buf, size_t _bufsize) {
   auto pack = tinypacker()
-    .field(bridge::cmd_readlink)
+    .field(scout::cmd_readlink)
     .field(path);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
@@ -124,7 +124,7 @@ size_t sandbox_bridge::send_readlink(const char* path, char* _buf, size_t _bufsi
 
 int sandbox_bridge::send_unlink(const char* path) {
   auto pack = tinypacker()
-    .field(bridge::cmd_unlink)
+    .field(scout::cmd_unlink)
     .field(path);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
@@ -134,7 +134,7 @@ int sandbox_bridge::send_unlink(const char* path) {
 
 pid_t sandbox_bridge::send_vfork() {
   auto pack = tinypacker()
-    .field(bridge::cmd_vfork);
+    .field(scout::cmd_vfork);
   auto buf = pack.pack_size_prefix();
   write(sock, buf, pack.get_size_prefix());
   free(buf);

@@ -11,6 +11,20 @@
  */
 class scout {
 public:
+  enum scout_cmd {
+    cmd_hello = 0x1,
+    cmd_open,
+    cmd_openat,
+    cmd_access,
+    cmd_fstat,
+    cmd_stat,
+    cmd_lstat,
+    cmd_execve,
+    cmd_readlink,
+    cmd_unlink,
+    cmd_vfork
+  };
+
   scout() : sock(-1) {}
   ~scout();
 
