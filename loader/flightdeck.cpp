@@ -1,6 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: set ts=8 sts=2 et sw=2 tw=80:
  */
+#include "flightdeck.h"
 #include "ptracetools.h"
 #include "loader.h"
 
@@ -344,6 +345,7 @@ private:
 
 const char* libtongdao_so_path = "../sandbox/libtongdao.so";
 
+namespace {
 /**
  * The whole shellcode comprises following components in order.
  * They are
@@ -372,8 +374,8 @@ const char* libtongdao_so_path = "../sandbox/libtongdao.so";
  * should set the registers and the content on the stack properly to
  * pass the arguments.
  */
-trapped_shellcode*
-prepare_shellcode(bool skip_filter) {
+static trapped_shellcode*
+prepare_shellcode(unsigned long global_flags) {
   auto so_path = libtongdao_so_path;
 
   ElfParser solib(so_path);
@@ -492,10 +494,6 @@ prepare_shellcode(bool skip_filter) {
   // will be relocated with the real address of the variable.  By
   // subtracting the value of the variable with the address of itself,
   // the real value can be recovered.
-  unsigned long int global_flags = 0;
-  if (skip_filter) {
-    global_flags |= 0x1;
-  }
   auto global_flags_ndx = solib.find_dynsym("global_flags");
   assert(global_flags_ndx >= 0);
   auto global_flags_sym = solib.get_dynsym() + global_flags_ndx;
@@ -574,15 +572,18 @@ prepare_shellcode(bool skip_filter) {
   return shellcode;
 }
 
+} // namespace
+
+namespace flightdeck {
 /**
- * Make the sandbox taking off.
+ * Make a scout taking off for a subject/process.
  *
- * |takeoff()| inject the loader to the target prcoess to load
- * libtongdao.so sandboxizing the process.
+ * |scout_takeoff()| inject the loader to the target prcoess to load
+ * libtongdao.so sandboxing the process.
  */
 long
-takeoff(pid_t pid) {
-  std::unique_ptr<trapped_shellcode> shellcode(prepare_shellcode(false));
+scout_takeoff(pid_t pid, unsigned long global_flags) {
+  std::unique_ptr<trapped_shellcode> shellcode(prepare_shellcode(global_flags));
 
   user_regs_struct saved_regs;
   ptrace_getregs(pid, saved_regs);
@@ -620,6 +621,8 @@ takeoff(pid_t pid) {
   return r;
 }
 
+} // namespace flightdeck
+
 #ifdef TEST
 
 #include <sys/ptrace.h>
@@ -627,13 +630,13 @@ takeoff(pid_t pid) {
 
 void
 child() {
-  for (int i = 0; i < 35; i++) {
+  for (int i = 0; i < 20; i++) {
     printf("child %d\n", i);
     sleep(1);
   }
   open("/dev/null", O_RDONLY);
   sleep(1);
-  write(2, "\nExit child\n", 12);
+  write(1, "\nExit child\n", 12);
 }
 
 void
@@ -661,10 +664,10 @@ parent(int pid) {
   ptrace_getregs(pid, regs);
   printf("rip %llx\n", regs.rip);
 
-  printf("takeoff\n");
-  r = takeoff(pid);
+  printf("takeoff scout\n");
+  r = flightdeck::scout_takeoff(pid, 0);
   if (r < 0) {
-    printf("fails to takeoff (%lx)!\n", r);
+    printf("fails to takeoff scout (%lx)!\n", r);
     return;
   }
 

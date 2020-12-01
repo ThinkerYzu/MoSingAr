@@ -11,7 +11,7 @@ int main(int argc, const char* argv[]) {
     perror("dup");
     return 255;
   }
-  auto str = "ok\n";
+  auto str = "OK\n";
   write(1, str, strlen(str));
   return 0;
 }

@@ -11,6 +11,11 @@
  */
 class scout {
 public:
+  constexpr static unsigned long FLAG_FILTER_INSTALLED = 0x1;
+  constexpr static unsigned long FLAG_CC_COMM_READY = 0x2;
+
+  constexpr static int CMD_CENTER_SOCK = 75;
+
   enum scout_cmd {
     cmd_hello = 0x1,
     cmd_open,

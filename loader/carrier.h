@@ -4,6 +4,8 @@
 #ifndef __carrier_h_
 #define __carrier_h_
 
+#include "cmdcenter.h"
+
 /**
  * Carrier creates the first subject, the process of a binary, and
  * initialize a sandbox for it and all subjects forked from it.
@@ -33,8 +35,20 @@
  */
 class carrier {
 public:
+  carrier();
+  ~carrier();
+
+  /**
+   * Run a missions and start monitoring and deceiving it and all
+   * off-spring subjects.
+   */
+  int run(int argc, char * const * argv);
+
+  void handle_messages();
+  void stop_msg_loop();
 
 private:
+  cmdcenter* cc;
 };
 
 #endif /* __carrier_h_ */

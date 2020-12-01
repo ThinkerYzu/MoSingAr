@@ -4,10 +4,12 @@
 #include "scout.h"
 #include "cmdcenter.h"
 #include "bridge.h"
+#include "tinypack.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
@@ -65,6 +67,7 @@ scout::establish_cc_channel() {
 
   close(socks[1]);
   sock = socks[0];
+  fcntl(sock, F_SETFD, FD_CLOEXEC);
 
   return true;
 }
@@ -90,12 +93,12 @@ scout::install_syscall_trampo() {
   return true;
 }
 
-extern void install_seccomp_sigsys();
+extern void install_seccomp_sigsys(int ccsock);
 extern void install_seccomp_filter();
 
 bool
 scout::install_sigsys() {
-  install_seccomp_sigsys();
+  install_seccomp_sigsys(sock);
   return true;
 }
 

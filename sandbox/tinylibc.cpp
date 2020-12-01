@@ -188,4 +188,29 @@ bzero(void* s, ssize_t n) {
     *p++ = 0;
   }
 }
+
+int
+dup2(int oldfd, int newfd) {
+  auto r = syscall_trampoline(__NR_dup2, (long)oldfd, (long)newfd);
+#ifndef NO_ERRNO
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+#endif
+  return r;
+}
+
+int
+fcntl(int fd, int cmd, int v) {
+  auto r = syscall_trampoline(__NR_fcntl, (long)fd, (long)cmd, (long)v);
+#ifndef NO_ERRNO
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+#endif
+  return r;
+}
+
 }

@@ -22,6 +22,9 @@
  * process, that has a fixed predefined FD number, CARRIER_SOCK.  Once
  * the socket of a scout has been received, the Command Center talk
  * with the scout privately.
+ *
+ * The socket created by a scout will be removed when it is
+ * disconncted either for error and death.
  */
 class cmdcenter {
 public:
@@ -34,10 +37,7 @@ public:
   /**
    * \param fd is the socket of the Carrier process.
    */
-  cmdcenter(int fd)
-    : stopping_message(false)
-    , efd(-1)
-    , carrierfd(fd) {}
+  cmdcenter(int fd);
   ~cmdcenter();
 
   bool init();
@@ -45,7 +45,16 @@ public:
   bool handle_message();
   void handle_messages();
   void handle_exec(pid_t pid);
+  /**
+   * Whenever a new scout is deployed, it establishes a communication
+   * channel with the Command Center, and the FD will be added to the
+   * list.
+   */
   bool add_scout(int subjecfd);
+  /**
+   * The socket of a scout will be removed whenever it is
+   * disconnected/closed.
+   */
   bool remove_scout(int scoutfd);
 
   int get_num_scouts() {
@@ -53,6 +62,8 @@ public:
   }
 
   void stop_msg_loop();
+
+  pid_t start_mission(int argc, char*const* argv);
 
 private:
   bool handle_carrier_msg();

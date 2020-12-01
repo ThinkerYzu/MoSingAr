@@ -84,7 +84,7 @@ read_text(pid_t pid, void* addr, void* ptr, unsigned int length) {
   for (unsigned int i = 0; i < cnt; i++) {
     auto r = ptrace(PTRACE_PEEKTEXT, pid, vaddr, nullptr);
     if (errno != 0) {
-      perror("prace");
+      perror("ptrace");
       return -1;
     }
     *v++ = r;

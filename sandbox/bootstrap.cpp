@@ -6,6 +6,7 @@
 #include "new"
 
 #include <stdlib.h>
+#include <unistd.h>
 
 #define assert(x) do { if (!(x)) { abort(); } } while(0)
 
@@ -15,9 +16,6 @@ extern void tinymalloc_init();
 
 unsigned long int global_flags __attribute__((visibility("default"))) = (unsigned long int)&global_flags;
 }
-
-#define FLAG_FILTER_INSTALLED 0x1
-#define FLAG_CC_COMM_READY 0x2
 
 class bootstrap {
 public:
@@ -32,7 +30,7 @@ public:
     auto syscall_r = sct->install_syscall_trampo();
     assert(syscall_r);
 
-    if (!(global_flags & FLAG_CC_COMM_READY)) {
+    if (!(global_flags & scout::FLAG_CC_COMM_READY)) {
       sct->establish_cc_channel();
     }
 
@@ -40,7 +38,7 @@ public:
 
     auto sigsys_r = sct->install_sigsys();
     assert(sigsys_r);
-    if (!(global_flags & FLAG_FILTER_INSTALLED)) {
+    if (!(global_flags & scout::FLAG_FILTER_INSTALLED)) {
       auto filter_r = sct->install_seccomp_filter();
       assert(filter_r);
     }

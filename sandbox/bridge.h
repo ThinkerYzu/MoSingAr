@@ -22,6 +22,8 @@ public:
   int send_unlink(const char* path);
   pid_t send_vfork();
 
+  void set_sock(int fd) { sock = fd; }
+
 private:
   int sock;
 };

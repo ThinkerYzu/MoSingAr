@@ -164,7 +164,9 @@ sigsys(int nr, siginfo_t *info, void* void_context) {
 }
 
 void
-install_seccomp_sigsys() {
+install_seccomp_sigsys(int ccsock) {
+  bridge.set_sock(ccsock);
+
   struct sigaction act;
   bzero(&act, sizeof(act));
   act.sa_sigaction = &sigsys;
