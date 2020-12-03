@@ -11,18 +11,21 @@
 #include <sys/fcntl.h>
 
 #define PG_SZ 4096
+// The address of the syscall trampoline that the seccomp filter will
+// skip it.
+#define TRAMPOLINE_ADDR 0x200000000000
 
 void loader_start() {}
 
 #ifdef __x86_64__
 static long
-_syscall(long nr,
-        long arg1 = 0,
-        long arg2 = 0,
-        long arg3 = 0,
-        long arg4 = 0,
-        long arg5 = 0,
-        long arg6 = 0) {
+__syscall(long nr,
+          long arg1 = 0,
+          long arg2 = 0,
+          long arg3 = 0,
+          long arg4 = 0,
+          long arg5 = 0,
+          long arg6 = 0) {
   long r;
   asm(" \
 movq %1, %%rax; \
@@ -44,11 +47,37 @@ movq %%rax, %0;"
 #error "Unknown platform"
 #endif
 
+static long
+_syscall(long nr,
+         long arg1 = 0,
+         long arg2 = 0,
+         long arg3 = 0,
+         long arg4 = 0,
+         long arg5 = 0,
+         long arg6 = 0) {
+  auto trampo = (long(*)(long, long, long, long, long, long, long))TRAMPOLINE_ADDR;
+  return trampo(nr, arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 long
 load_shared_object(const char* path, prog_header* headers, int header_num,
                    void (**init_array)(),
                    void** rela,
                    long flags) {
+  // For the seccomp filter may have been installed, setup the syscall
+  // trampoline to skip the check.
+  auto syscall_tramp = __syscall(__NR_mmap,
+                                 TRAMPOLINE_ADDR,
+                                 4096,
+                                 PROT_READ | PROT_WRITE | PROT_EXEC,
+                                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                                 -1,
+                                 0);
+  auto trampo_sz = (char*)_syscall - (char*)__syscall;
+  for (int i = 0; i < trampo_sz; i++) {
+    ((char*)syscall_tramp)[i] = ((char*)__syscall)[i];
+  }
+
   auto fd = _syscall(__NR_open, (long)path, (long)O_RDONLY);
   if (fd < 0) {
     return fd;

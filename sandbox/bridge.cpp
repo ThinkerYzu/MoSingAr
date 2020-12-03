@@ -5,6 +5,8 @@
 #include "scout.h"
 #include "tinypack.h"
 
+#include "msghelper.h"
+
 #include <sys/socket.h>
 #include <asm/unistd.h>
 
@@ -12,49 +14,11 @@
 #include <assert.h>
 
 
-extern "C"
-const char trampoline_progm[] = "./tdtrampoline";
-
 extern "C" {
 extern long (*td__syscall_trampo)(long, ...);
 }
 
-static int
-send_msg(int sock, void* buf, int bufsz, int sendfd1 = -1, int sendfd2 = -1) {
-  auto cmsgcnt = 0;
-  if (sendfd1 >= 0) cmsgcnt++;
-  if (sendfd2 >= 0) cmsgcnt++;
-
-  auto cmsgsz = CMSG_SPACE(sizeof(int) * cmsgcnt);
-  char _cmsg_buf[cmsgsz];
-  char* cmsg_buf = _cmsg_buf;
-  if (cmsgcnt == 0) {
-    cmsg_buf = nullptr;
-    cmsgsz = 0;
-  }
-  iovec vec = { buf, (size_t)bufsz };
-  msghdr msg = { nullptr, 0, &vec, 1, cmsg_buf, (size_t)cmsgsz, 0 };
-
-  if (cmsgcnt > 0) {
-    auto cmsg = CMSG_FIRSTHDR(&msg);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;
-    cmsg->cmsg_len = CMSG_LEN(sizeof(int) * cmsgcnt);
-    auto data = (int*)CMSG_DATA(cmsg);
-    if (sendfd1) {
-      *data++ = sendfd1;
-    }
-    if (sendfd2) {
-      *data++ = sendfd2;
-    }
- }
-
-  auto r = sendmsg(sock, &msg, 0);
-  if (r < 0) {
-    perror("sendmsg");
-  }
-  return r;
-}
+#define SYSCALL td__syscall_trampo
 
 int sandbox_bridge::send_open(const char* path, int flags, mode_t mode) {
   auto pack = tinypacker()
@@ -82,12 +46,12 @@ int sandbox_bridge::send_openat(int dirfd, const char* path, int flags, mode_t m
 }
 
 int sandbox_bridge::send_dup(int oldfd) {
-  auto r = td__syscall_trampo(__NR_dup, oldfd);
+  auto r = SYSCALL(__NR_dup, oldfd);
   return r;
 }
 
 int sandbox_bridge::send_dup2(int oldfd, int newfd) {
-  auto r = td__syscall_trampo(__NR_dup2, oldfd, newfd);
+  auto r = SYSCALL(__NR_dup2, oldfd, newfd);
   return r;
 }
 
@@ -145,7 +109,22 @@ int sandbox_bridge::send_lstat(const char* path, struct stat* statbuf) {
  * trampoline program.
  */
 int sandbox_bridge::send_execve(const char* filename, char*const* argv, char*const* envp) {
-  auto r = td__syscall_trampo(__NR_execve, trampoline_progm, argv, envp);
+  auto pid = SYSCALL(__NR_getpid);
+  if (pid < 0) {
+    return pid;
+  }
+  auto pack = tinypacker()
+    .field(scout::cmd_execve)
+    .field((int)pid)
+    .field(filename);
+  auto buf = pack.pack_size_prefix();
+  send_msg(sock, buf, pack.get_size_prefix());
+  auto ok = rcvr->receive_one();
+  if (!ok) {
+    return -1;
+  }
+
+  auto r = SYSCALL(__NR_execve, filename, argv, envp);
   return r;
 }
 
@@ -176,4 +155,11 @@ pid_t sandbox_bridge::send_vfork() {
   send_msg(sock, buf, pack.get_size_prefix());
   free(buf);
   return 0;
+}
+
+void sandbox_bridge::set_sock(int fd) {
+  sock = fd;
+  // This instance is never deleted.
+  auto buf = malloc(sizeof(msg_receiver));
+  rcvr = new(buf) msg_receiver(fd);
 }

@@ -20,8 +20,12 @@
 
 
 extern "C" {
-long (*td__syscall_trampo)(long, ...);
 extern long syscall_trampoline(long, ...);
+// The syscall trampoline, it will point to a copy at a fixed address
+// later that the seccomp filter will always allow it.
+long (*td__syscall_trampo)(long, ...) = syscall_trampoline;
+
+extern unsigned long int global_flags;
 }
 
 scout::~scout() {
@@ -75,6 +79,21 @@ scout::establish_cc_channel() {
 #endif  // !DUMMY || TEST_CC_CHANNEL
 
 #if !defined(DUMMY)
+
+bool
+scout::init_sandbox() {
+  if (!(global_flags & FLAG_CC_COMM_READY)) {
+    establish_cc_channel();
+  }
+
+  auto sigsys_r = install_sigsys();
+  assert(sigsys_r);
+  if (!(global_flags & FLAG_FILTER_INSTALLED)) {
+    auto filter_r = install_seccomp_filter();
+    assert(filter_r);
+  }
+  return true;
+}
 
 bool
 scout::install_syscall_trampo() {

@@ -505,6 +505,7 @@ prepare_shellcode(unsigned long global_flags) {
     (char*)shellcode_funcall_trap_end - (char*)shellcode_funcall_trap;
   auto loader_bytes = (char*)loader_end - (char*)loader_start;
   auto shellcode = new trapped_shellcode;
+  shellcode->base = nullptr;
 
 #define ROUND8(x) do { x = (x + 0x7) & ~0x7; } while(0)
 
@@ -630,7 +631,7 @@ scout_takeoff(pid_t pid, unsigned long global_flags) {
 
 void
 child() {
-  for (int i = 0; i < 20; i++) {
+  for (int i = 0; i < 7; i++) {
     printf("child %d\n", i);
     sleep(1);
   }
@@ -680,8 +681,8 @@ parent(int pid) {
     return;
   }
 
-  printf("Go to sleep 30s\n");
-  sleep(30);
+  printf("Go to sleep 10s\n");
+  sleep(10);
   printf("detach\n");
   r = ptrace(PTRACE_DETACH, pid, nullptr, 0);
 }

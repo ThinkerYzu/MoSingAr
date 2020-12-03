@@ -13,15 +13,24 @@
 
 static pid_t childpid = -1;
 static carrier *carrier_ptr = nullptr;
+static int exitval = 255;
+bool sigchld_ignore = false;
 
 void
 sigchld_handler(int signum, siginfo_t* info, void* ucontext) {
   assert(signum == SIGCHLD);
-  if (info->si_pid != childpid) {
+  if (info->si_pid != childpid || sigchld_ignore) {
     return;
   }
   auto status = info->si_status;
-  if (WIFEXITED(status)) {
+  if (WIFSTOPPED(status)) {
+    printf("The child has been stopped by signum %d\n", WSTOPSIG(status));
+  } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
+    if (WIFSIGNALED(status)) {
+      printf("The child is terminated for signum %d\n", WTERMSIG(status));
+    } else {
+      exitval = WEXITSTATUS(status) & 0xff;
+    }
     carrier_ptr->stop_msg_loop();
   }
 }
@@ -29,6 +38,7 @@ sigchld_handler(int signum, siginfo_t* info, void* ucontext) {
 int
 main(int argc, char*const* argv) {
   carrier crr;
+  carrier_ptr = &crr;
 
   auto pid = crr.run(argc - 1, argv + 1);
 
@@ -54,4 +64,6 @@ main(int argc, char*const* argv) {
   }
 
   crr.handle_messages();
+
+  return exitval;
 }

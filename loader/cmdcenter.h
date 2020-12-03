@@ -44,7 +44,7 @@ public:
 
   bool handle_message();
   void handle_messages();
-  void handle_exec(pid_t pid);
+  bool handle_exec(pid_t pid, int sock);
   /**
    * Whenever a new scout is deployed, it establishes a communication
    * channel with the Command Center, and the FD will be added to the

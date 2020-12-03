@@ -10,14 +10,21 @@
 
 #include <new>
 
+#ifndef TEST
 void* operator new(std::size_t count, void* ptr);
 void* operator new[](std::size_t count, void* ptr);
+#endif
 
 #define assert(x) do { if(!(x)) { write(2, "\n", 1); write(2, #x, sizeof(#x) - 1); write(2, "\n", 1); abort(); } } while(0)
 
 extern "C" {
 extern long (*td__syscall_trampo)(long, ...);
 }
+#ifdef TEST
+#define SYSCALL syscall
+#else
+#define SYSCALL td__syscall_trampo
+#endif
 
 struct chunkinfo_t {
   void* begin;
@@ -113,6 +120,7 @@ struct chunkinfo_t {
   }
 };
 
+#define LARGE_CHUNK 0xff
 #define SMALL_ALLOC_LOWER_POW 2
 #define SMALL_ALLOC_UPPER_POW 8
 #define SMALL_ALLOC_TYPES (SMALL_ALLOC_UPPER_POW - SMALL_ALLOC_LOWER_POW + 1)
@@ -131,11 +139,17 @@ public:
   chunkinfo_t* buckets[SMALL_ALLOC_TYPES + 1];
   uint32_t nfrees[SMALL_ALLOC_TYPES + 1];
 
+  chunkinfo_t* large;
+  chunkinfo_t* large_free;
+
   mem_block_t(void *mem, uint32_t size)
     : start(mem)
     , next_free(mem)
     , size(size)
-    , used(0) {
+    , used(0)
+    , in_alloc_chunk(false)
+    , large(nullptr)
+    , large_free(nullptr) {
     for (int i = 0; i < SMALL_ALLOC_TYPES + 1; i++) {
       buckets[i] = nullptr;
       nfrees[i] = 0;
@@ -153,7 +167,7 @@ public:
       }
       return i - SMALL_ALLOC_LOWER_POW;
     }
-    return -1;
+    return LARGE_CHUNK;
   }
 
   static uint32_t get_type_pow(uint32_t pow) {
@@ -207,24 +221,71 @@ public:
     buckets[type] = chunk;
   }
 
-  chunkinfo_t* _alloc_chunk(uint32_t type) {
+  void put_large(chunkinfo_t* chunk) {
+    auto ptr = large;
+    if (ptr == nullptr || ptr->elm_size >= chunk->elm_size) {
+      chunk->next = large;
+      large = chunk;
+      return;
+    }
+    chunkinfo_t* last = nullptr;
+    while (ptr != nullptr) {
+      if (ptr->elm_size < chunk->elm_size) {
+        last = ptr;
+        ptr = ptr->next;
+        continue;
+      }
+      chunk->next = ptr;
+      last->next = chunk;
+      return;
+    }
+    last->next = chunk;
+  }
+
+  void put_large_free(chunkinfo_t* chunk) {
+    auto ptr = large_free;
+    if (ptr == nullptr || ptr->elm_size >= chunk->elm_size) {
+      chunk->next = large_free;
+      large_free = chunk;
+      return;
+    }
+    chunkinfo_t* last = nullptr;
+    while (ptr != nullptr) {
+      if (ptr->elm_size < chunk->elm_size) {
+        last = ptr;
+        ptr = ptr->next;
+        continue;
+      }
+      chunk->next = ptr;
+      last->next = chunk;
+      return;
+    }
+    last->next = chunk;
+  }
+
+  chunkinfo_t* _alloc_chunk(uint32_t type, uint32_t bytes) {
     auto ptr = _alloc_small(get_type(sizeof(chunkinfo_t)));
     if (ptr == nullptr) {
       return nullptr;
     }
-    auto chunk = new(ptr) chunkinfo_t(get_size(type), next_free, 1024);
+    auto elm_size = type == LARGE_CHUNK ? bytes : get_size(type);
+    auto chunk = new(ptr) chunkinfo_t(elm_size, next_free, bytes);
     next_free = (char*)next_free + chunk->bytes;
 
-    put_front(chunk, nullptr);
-    nfrees[type] += chunk->nfree;
+    if (type == LARGE_CHUNK) {
+      put_large(chunk);
+    } else {
+      put_front(chunk, nullptr);
+      nfrees[type] += chunk->nfree;
+    }
 
     return chunk;
   }
-  chunkinfo_t* alloc_chunk(uint32_t type) {
+  chunkinfo_t* alloc_chunk(uint32_t type, uint32_t bytes = 1024) {
     assert(!in_alloc_chunk);
     in_alloc_chunk = true;
 
-    auto chunk = _alloc_chunk(type);
+    auto chunk = _alloc_chunk(type, bytes);
 
     in_alloc_chunk = false;
     return chunk;
@@ -262,11 +323,36 @@ public:
     return _alloc_small(type);
   }
 
+  void* alloc_large(uint32_t bytes) {
+    if (large_free) {
+      auto ptr = large_free;
+      if (ptr->elm_size >= bytes) {
+        large_free = ptr->next;
+        put_large(ptr);
+        return ptr->begin;
+      }
+      chunkinfo_t* last = nullptr;
+      while (ptr) {
+        if (ptr->elm_size < bytes) {
+          last = ptr;
+          ptr = ptr->next;
+          continue;
+        }
+        last->next = ptr->next;
+        put_large(ptr);
+        return ptr->begin;
+      }
+    }
+    make_sure();
+    bytes = (bytes + 0xff) & ~0xff;
+    auto chunk = alloc_chunk(LARGE_CHUNK, bytes);
+    return chunk->begin;
+  }
+
   void* alloc(uint32_t size) {
     auto type = get_type(size);
-    if (type == -1) {
-      // do not support yet
-      return nullptr;
+    if (type == LARGE_CHUNK) {
+      return alloc_large(size);
     }
     return alloc_small(type);
   }
@@ -294,6 +380,23 @@ public:
         return chunk;
       }
     }
+    if (large) {
+      auto chunk = large;
+      if (chunk->begin == ptr) {
+        large = chunk->next;
+        return chunk;
+      }
+      chunkinfo_t* last = nullptr;
+      while (chunk) {
+        if (chunk->begin != ptr) {
+          last = chunk;
+          chunk = chunk->next;
+          continue;
+        }
+        last->next = chunk->next;
+        return chunk;
+      }
+    }
     return nullptr;
   }
 
@@ -302,29 +405,34 @@ public:
     auto chunk = find_chunk(ptr, &prev);
     assert(chunk);
 
-    chunk->free(ptr);
+    if (chunk->elm_size != chunk->bytes) {
+      chunk->free(ptr);
 
-    put_front(chunk, prev);
+      put_front(chunk, prev);
 
-    auto type = get_type(chunk->elm_size);
-    nfrees[type]++;
+      auto type = get_type(chunk->elm_size);
+      nfrees[type]++;
+    } else {
+      put_large_free(chunk);
+    }
   }
 };
 
 static mem_block_t *global_mem_block = nullptr;
 
+#ifndef TEST
 extern "C" {
 void tinymalloc_init() {
   static char buf[sizeof(mem_block_t)];
   assert(global_mem_block == nullptr);
 
-  auto mem = (void*)td__syscall_trampo(__NR_mmap,
-                                       nullptr,
-                                       1024 * 1024,
-                                       PROT_READ | PROT_WRITE,
-                                       MAP_PRIVATE | MAP_ANONYMOUS,
-                                       -1,
-                                       0);
+  auto mem = (void*)SYSCALL(__NR_mmap,
+                            nullptr,
+                            1024 * 1024,
+                            PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS,
+                            -1,
+                            0);
   auto block = new(buf) mem_block_t(mem, 1024 * 1024);
   block->init();
   global_mem_block = block;
@@ -373,9 +481,13 @@ void operator delete[](void* ptr) throw() {
   free(ptr);
 }
 
+#endif // !TEST
+
 #ifdef TEST
 
-static char mem[4096];
+#include <stdio.h>
+
+static char mem[8192];
 
 int
 main(int argc, char * const argv[]) {
@@ -393,6 +505,14 @@ main(int argc, char * const argv[]) {
     printf("%p\n", ptr);
     block.free(ptr);
     ptr = block.alloc_small(2);
+  }
+  printf("1024byts\n");
+  for (int i = 0; i < 10; i++) {
+    auto ptr = block.alloc(1024);
+    auto ptr2 = block.alloc(768);
+    printf("%p %p\n", ptr, ptr2);
+    block.free(ptr);
+    block.free(ptr2);
   }
 }
 

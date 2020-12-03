@@ -7,6 +7,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+class msg_receiver;
+
 class sandbox_bridge {
 public:
   int send_open(const char* path, int flags, mode_t mode);
@@ -22,10 +24,11 @@ public:
   int send_unlink(const char* path);
   pid_t send_vfork();
 
-  void set_sock(int fd) { sock = fd; }
+  void set_sock(int fd);
 
 private:
   int sock;
+  msg_receiver* rcvr;
 };
 
 /**

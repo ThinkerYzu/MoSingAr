@@ -75,6 +75,26 @@ inject_text(pid_t pid, void* addr, void* ptr, unsigned int length) {
 }
 
 long
+inject_data(pid_t pid, void* addr, void* ptr, unsigned int length) {
+  assert((length & 0x7) == 0);
+
+  auto v = (const uint64_t*)ptr;
+  auto cnt = length / 8;
+  auto vaddr = (uint64_t*)addr;
+  for (unsigned int i = 0; i < cnt; i++) {
+    printf("idata %p %p %lx\n", vaddr, v, *v);
+    auto r = ptrace(PTRACE_POKEDATA, pid, vaddr, *v);
+    if (r < 0) {
+      perror("ptrace");
+      return r;
+    }
+    v++;
+    vaddr++;
+  }
+  return 0;
+}
+
+long
 read_text(pid_t pid, void* addr, void* ptr, unsigned int length) {
   assert((length & 0x7) == 0);
 
@@ -91,6 +111,71 @@ read_text(pid_t pid, void* addr, void* ptr, unsigned int length) {
     vaddr++;
   }
   return 0;
+}
+
+long
+ptrace_attach(pid_t pid) {
+  auto r = ptrace(PTRACE_ATTACH, pid, nullptr, 0);
+  if (r < 0) {
+    perror("ptrace");
+    return r;
+  }
+
+  return ptrace_waitstop(pid);
+}
+
+long
+ptrace_waitstop(pid_t pid) {
+  int status;
+  do {
+    auto r = waitpid(pid, &status, 0);
+    if (r < 0) {
+      perror("waitpid");
+      return r;
+    }
+    if (WIFEXITED(status)) {
+      fprintf(stderr, "The process %d has exited (%d)!\n", pid, WEXITSTATUS(status));
+      return -1;
+    }
+    if (WIFSIGNALED(status)) {
+      fprintf(stderr, "The process %d has been terminated by signum %d!\n",
+              pid, WTERMSIG(status));
+      return -1;
+    }
+    if (WIFSTOPPED(status) && WSTOPSIG(status) != SIGSTOP) {
+      fprintf(stderr, "The process %d has been stopped with by signum %d!\n",
+              pid, WSTOPSIG(status));
+      return -1;
+    }
+  } while(!WIFSTOPPED(status) || WSTOPSIG(status) != SIGSTOP);
+  return 0;
+}
+
+long
+ptrace_waittrap(pid_t pid) {
+  int status;
+  do {
+    auto r = waitpid(pid, &status, 0);
+    if (r < 0) {
+      perror("waitpid");
+      return r;
+    }
+    if (WIFEXITED(status)) {
+      fprintf(stderr, "The process %d has exited (%d)!\n", pid, WEXITSTATUS(status));
+      return -1;
+    }
+    if (WIFSIGNALED(status)) {
+      fprintf(stderr, "The process %d has been terminated by signum %d!\n",
+              pid, WTERMSIG(status));
+      return -1;
+    }
+    if (WIFSTOPPED(status) && WSTOPSIG(status) != SIGTRAP) {
+      fprintf(stderr, "The process %d has been stopped with by signum %d!\n",
+              pid, WSTOPSIG(status));
+      return -1;
+    }
+  } while(!WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP);
+  return (status >> 16) & 0xff;
 }
 
 long
@@ -114,12 +199,22 @@ ptrace_stop(pid_t pid) {
 
 long
 ptrace_cont(pid_t pid) {
-  auto r = ptrace(PTRACE_CONT, pid, nullptr, nullptr);
+  auto r = ptrace(PTRACE_CONT, pid, nullptr, 0);
   if (r < 0) {
     perror("ptrace");
     return r;
   }
   return 0;
+}
+
+long
+ptrace_stepi(pid_t pid) {
+  auto r = ptrace(PTRACE_SINGLESTEP, pid, 0, 0);
+  if (r < 0) {
+    perror("ptrace");
+    return r;
+  }
+  return ptrace_waittrap(pid);
 }
 
 long
@@ -210,14 +305,12 @@ inject_run_syscall(pid_t pid,
   if (r < 0) {
     return r;
   }
-  int status = 0;
-  do {
-    r = waitpid(pid, &status, 0);
-    if (r < 0) {
-      perror("waitpid");
-      return r;
-    }
-  } while(!WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP);
+
+  // Wait that the shell code stop.
+  r = ptrace_waittrap(pid);
+  if (r < 0) {
+    return r;
+  }
 
   // Get the return value
   r = ptrace_getregs(pid, call_regs);
@@ -378,19 +471,10 @@ inject_run_funcall_nosave(pid_t pid,
   if (r < 0) {
     return r;
   }
-  int status = 0;
-  do {
-    r = waitpid(pid, &status, 0);
-    if (r < 0) {
-      perror("waitpid");
-      return r;
-    }
-    if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGSEGV) {
-      ptrace_getregs(pid, call_regs);
-      printf("SIGSEGV rip %llx\n", call_regs.rip);
-      return -1;
-    }
-  } while(!WIFSTOPPED(status) || WSTOPSIG(status) != SIGTRAP);
+  r = ptrace_waittrap(pid);
+  if (r < 0) {
+    return r;
+  }
 
   // Get the return value
   r = ptrace_getregs(pid, call_regs);

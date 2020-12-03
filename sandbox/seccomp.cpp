@@ -23,7 +23,6 @@
 #include <stdlib.h>
 
 extern "C" {
-extern long syscall_trampoline(long, ...);
 extern int seccomp(unsigned int, unsigned int, void *);
 }
 

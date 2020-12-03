@@ -16,9 +16,14 @@ void mk_funcall_args(user_regs_struct& regs,
                      unsigned long long arg6=0);
 
 long inject_text(pid_t, void*, void*, unsigned int);
+long inject_data(pid_t, void*, void*, unsigned int);
 long read_text(pid_t, void*, void*, unsigned int);
+long ptrace_attach(pid_t);
+long ptrace_waitstop(pid_t);
+long ptrace_waittrap(pid_t);
 long ptrace_stop(pid_t);
 long ptrace_cont(pid_t);
+long ptrace_stepi(pid_t);
 long ptrace_getregs(pid_t, user_regs_struct&);
 long ptrace_setregs(pid_t, const user_regs_struct&);
 long inject_run_syscall(pid_t pid, int nr,

@@ -8,8 +8,10 @@
 
 extern "C" {
 
-extern long syscall_trampoline(long, ...);
+extern long (*td__syscall_trampo)(long, ...);
 extern void sig_trampoline();
+
+#define SYSCALL td__syscall_trampo
 
 void printptr(void* p) {
   auto addr = (long)p;
@@ -22,7 +24,7 @@ void printptr(void* p) {
     auto v = 0xf & (addr >> i);
     buf[bidx++] = v < 10 ? '0' + v : 'a' + (v - 10);
   }
-  syscall_trampoline(__NR_write, 1, (long)buf, 19);
+  SYSCALL(__NR_write, 1, (long)buf, 19);
 }
 
 void*
@@ -37,7 +39,7 @@ memcpy(void* dest, const void* src, size_t n) {
 
 void *
 mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset) {
-  auto r = syscall_trampoline(__NR_mmap, addr, length, prot, flags, fd, offset);
+  auto r = SYSCALL(__NR_mmap, addr, length, prot, flags, fd, offset);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -49,7 +51,7 @@ mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset) {
 
 ssize_t
 write(int fd, const void* buf, size_t count) {
-  auto r = syscall_trampoline(__NR_write, fd, buf, count);
+  auto r = SYSCALL(__NR_write, fd, buf, count);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -90,7 +92,7 @@ sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
     kact.sa_mask = act->sa_mask;
   }
 
-  auto r = syscall_trampoline(__NR_rt_sigaction, signum, &kact, &koldact, 8);
+  auto r = SYSCALL(__NR_rt_sigaction, signum, &kact, &koldact, 8);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -111,7 +113,7 @@ int
 prctl(int option, unsigned long arg2, unsigned long arg3,
       unsigned long arg4, unsigned long arg5) {
   arg3 = arg4 = arg5 = 0;
-  auto r = syscall_trampoline(__NR_prctl, option, arg2, arg3, arg4, arg5);
+  auto r = SYSCALL(__NR_prctl, option, arg2, arg3, arg4, arg5);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -126,7 +128,7 @@ abort() {
 #ifdef DEBUG_TRAP
   asm("int3;");
 #endif
-  syscall_trampoline(__NR_exit, 255);
+  SYSCALL(__NR_exit, 255);
 }
 
 void
@@ -136,7 +138,7 @@ perror(const char* s) {
 }
 
 int seccomp(unsigned int operation, unsigned int flags, void *args) {
-  auto r = syscall_trampoline(__NR_seccomp, operation, flags, args);
+  auto r = SYSCALL(__NR_seccomp, operation, flags, args);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -147,7 +149,7 @@ int seccomp(unsigned int operation, unsigned int flags, void *args) {
 }
 
 int close(int fd) {
-  auto r = syscall_trampoline(__NR_close, fd);
+  auto r = SYSCALL(__NR_close, fd);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -158,7 +160,7 @@ int close(int fd) {
 }
 
 int socketpair(int domain, int type, int protocol, int sv[2]) {
-  auto r = syscall_trampoline(__NR_socketpair, (long)domain, (long)type, (long)protocol, (long)sv);
+  auto r = SYSCALL(__NR_socketpair, (long)domain, (long)type, (long)protocol, (long)sv);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -171,7 +173,7 @@ int socketpair(int domain, int type, int protocol, int sv[2]) {
 struct msghdr;
 
 int sendmsg(int sockfd, const struct msghdr *msg, int flags) {
-  auto r = syscall_trampoline(__NR_sendmsg, (long)sockfd, (long)msg, (long)flags);
+  auto r = SYSCALL(__NR_sendmsg, (long)sockfd, (long)msg, (long)flags);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -191,7 +193,7 @@ bzero(void* s, ssize_t n) {
 
 int
 dup2(int oldfd, int newfd) {
-  auto r = syscall_trampoline(__NR_dup2, (long)oldfd, (long)newfd);
+  auto r = SYSCALL(__NR_dup2, (long)oldfd, (long)newfd);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;
@@ -203,7 +205,19 @@ dup2(int oldfd, int newfd) {
 
 int
 fcntl(int fd, int cmd, int v) {
-  auto r = syscall_trampoline(__NR_fcntl, (long)fd, (long)cmd, (long)v);
+  auto r = SYSCALL(__NR_fcntl, (long)fd, (long)cmd, (long)v);
+#ifndef NO_ERRNO
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+#endif
+  return r;
+}
+
+ssize_t recvmsg(int sockfd, struct msghdr* msg, int flags) {
+  auto r = SYSCALL(__NR_recvmsg,
+                              (long)sockfd, (long)msg, (long)flags);
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;

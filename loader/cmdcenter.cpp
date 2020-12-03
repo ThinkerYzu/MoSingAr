@@ -5,12 +5,16 @@
 #include "flightdeck.h"
 #include "scout.h"
 #include "ptracetools.h"
+#include "tinypack.h"
+#include "msghelper.h"
 
 #include <stdio.h>
 #include <unistd.h>
+#include <asm/unistd.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <sys/ptrace.h>
+#include <sys/wait.h>
 #include <assert.h>
 #include <errno.h>
 
@@ -46,67 +50,6 @@ cmdcenter::~cmdcenter() {
   }
   close(efd);
 }
-
-namespace {
-
-/**
- * Receive one message a time from the sock that may along with FDs.
- */
-class msg_receiver {
-public:
-  constexpr static int data_buf_size = 1024;
-  // It can handle at most 2 FDs in a message.
-  constexpr static int fd_rcvd_size = 2;
-
-  msg_receiver(int fd)
-    : fd(fd)
-    , fd_rcvd_num(0)
-    , data_bytes(0) {
-  }
-
-  bool receive_one();
-
-  int get_data_bytes() { return data_bytes; }
-  char* get_data() { return data; }
-
-  int get_fd_rcvd_num() { return fd_rcvd_num; }
-  int* get_fd_rcvd() { return fd_rcvd; }
-
-private:
-  int fd;
-  int fd_rcvd_num;
-  int fd_rcvd[fd_rcvd_size];
-  int data_bytes;
-  char data[data_buf_size];
-};
-
-bool
-msg_receiver::receive_one() {
-  auto cmsg_buf_sz = CMSG_SPACE(sizeof(int) * fd_rcvd_size);
-  char cmsg_buf[cmsg_buf_sz];
-  iovec vec = { data, data_buf_size };
-  msghdr msg = { nullptr, 0, &vec, 1, cmsg_buf, cmsg_buf_sz, 0 };
-
-  data_bytes = recvmsg(fd, &msg, MSG_DONTWAIT);
-  if (data_bytes < 0) {
-    perror("recvmsg");
-    return false;
-  }
-  assert((unsigned)data_bytes >= sizeof(int));
-  assert(!(msg.msg_flags & MSG_TRUNC));
-
-  if (msg.msg_controllen >= CMSG_SPACE(sizeof(int))) {
-    auto cmsg = CMSG_FIRSTHDR(&msg);
-    fd_rcvd_num = cmsg->cmsg_len / CMSG_LEN(sizeof(int));
-    assert(fd_rcvd_num <= fd_rcvd_size);
-    for (int i = 0; i < fd_rcvd_num; i++) {
-      fd_rcvd[i] = ((int*)CMSG_DATA(cmsg))[i];
-    }
-  }
-  return true;
-}
-
-} // namespace
 
 bool
 cmdcenter::init() {
@@ -169,8 +112,49 @@ cmdcenter::handle_messages() {
   stopping_message = false;
 }
 
-void
-cmdcenter::handle_exec(pid_t pid) {
+bool
+cmdcenter::handle_exec(pid_t pid, int sock) {
+  // Attach & trace the process
+  _E(ptrace_attach, pid);
+  ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEEXEC);
+  // Make the process running
+  ptrace_cont(pid);
+  int ok = 1;
+  auto packer = tinypacker()
+    .field(ok);
+  auto reply = packer.pack_size_prefix();
+  _E(send_msg, sock, reply, packer.get_size_prefix());
+  // Wait for exec()
+  auto evt = ptrace_waittrap(pid);
+  if (evt < 0) {
+    return false;
+  }
+  assert(evt == PTRACE_EVENT_EXEC);
+
+  // Run the first instruction of the tracee before code injection.
+  //
+  // This is required to set the values of registers correctly for the
+  // injected code.  Without this, PTRACE_SETREGS will take no
+  // effects.  I guess it is overwrote by the kernel since kernel
+  // haven't returned to the user space of the process, and it may set
+  // the registers with values when it returns to the user space first
+  // time.
+  auto r = ptrace_stepi(pid);
+  if (r < 0) {
+    return false;
+  }
+
+  // Install the signal handler and establish a channel, but not
+  // install the seccomp filter.
+  _E(flightdeck::scout_takeoff, pid, scout::FLAG_FILTER_INSTALLED);
+
+  _E(ptrace, PTRACE_SETOPTIONS, pid, 0, 0);
+
+  ptrace_cont(pid);
+
+  ptrace(PTRACE_DETACH, pid, nullptr, nullptr);
+
+  return true;
 }
 
 bool
@@ -237,10 +221,20 @@ cmdcenter::start_mission(int argc, char*const* argv) {
       perror("ptrace");
       return -1;
     }
+    // Wait the child to be attached.
+    int status;
+    do {
+      _EA(waitpid, childpid, &status, 0);
+    } while(!WIFSTOPPED(status) && WSTOPSIG(status) != SIGTRAP);
 
     _EI(flightdeck::scout_takeoff, childpid, 0);
 
-    ptrace_cont(childpid);
+    // Detach the process or it might be blocked for serveral reasons.
+    r = ptrace(PTRACE_DETACH, childpid, nullptr, 0);
+    if (r < 0) {
+      perror("ptrace");
+      return -1;
+    }
 
     // Has taken off. Let the child continue.
     char buf =  0xff;
@@ -251,7 +245,8 @@ cmdcenter::start_mission(int argc, char*const* argv) {
     _EA(close, toffsocks[0]);
 
     // Wait for taking off in the parent process
-    char buf;
+    //char buf;
+    char buf = 0xff;
     _EA(read, toffsocks[1], &buf, 1);
     _EA(close, toffsocks[1]);
 
@@ -303,6 +298,52 @@ cmdcenter::handle_scout_msg(int sock) {
   case scout::cmd_hello:
     assert(ptr == data_end);
     assert(rcvr->get_fd_rcvd_num() == 0);
+    break;
+
+  case scout::cmd_access:
+    {
+      char* path;
+      int mode;
+      auto unpacker = tinyunpacker(ptr, payload_bytes)
+        .field(path)
+        .field(mode);
+
+      assert(unpacker.check_completed());
+      unpacker.unpack();
+
+      auto r = access(path, mode);
+
+      auto packer = tinypacker()
+        .field(r);
+      auto result = packer.pack_size_prefix();
+      send_msg(sock, result, packer.get_size_prefix());
+
+      free(result);
+      free(path);
+    }
+    break;
+
+  case scout::cmd_execve:
+    {
+      char* path;
+      int pid;
+      auto unpacker = tinyunpacker(ptr, data_end - ptr)
+        .field(pid)
+        .field(path);
+
+      assert(unpacker.check_completed());
+      unpacker.unpack();
+      free(path);
+
+      extern bool sigchld_ignore;
+      sigchld_ignore = true;
+      auto ok = handle_exec(pid, sock);
+      sigchld_ignore = false;
+      if (!ok) {
+        return false;
+      }
+
+    }
     break;
 
   default:

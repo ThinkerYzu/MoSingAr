@@ -78,7 +78,13 @@ public:
     memcpy(strbuf, readfrom + sizeof(unsigned int), sz);
     v = strbuf;
   }
+  static void readbuf(char*&v, const char* readfrom) {
+    readbuf(*(const char**)&v, readfrom);
+  }
 };
+
+template<>
+class tinypack_value_trait<char*> : public tinypack_value_trait<const char*> {};
 
 template <typename Base, typename T>
 class tinypack {
@@ -236,7 +242,7 @@ public:
     return 0;
   }
 
-  bool check_completion() {
+  bool check_completed() {
     return true;
   }
 

@@ -7,8 +7,18 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
-#define assert(x) do { if (!(x)) { abort(); } } while(0)
+#define assert(x)                  \
+  do {                             \
+    if (!(x)) {                    \
+      write(2, "assertion: ", 11); \
+      write(2, #x, strlen(#x));    \
+      char lf = '\n';              \
+      write(2, &lf, 1);            \
+      abort();                     \
+    }                              \
+  } while(0)
 
 
 extern "C" {
@@ -30,18 +40,9 @@ public:
     auto syscall_r = sct->install_syscall_trampo();
     assert(syscall_r);
 
-    if (!(global_flags & scout::FLAG_CC_COMM_READY)) {
-      sct->establish_cc_channel();
-    }
-
     tinymalloc_init();
 
-    auto sigsys_r = sct->install_sigsys();
-    assert(sigsys_r);
-    if (!(global_flags & scout::FLAG_FILTER_INSTALLED)) {
-      auto filter_r = sct->install_seccomp_filter();
-      assert(filter_r);
-    }
+    sct->init_sandbox();
   }
 
 private:

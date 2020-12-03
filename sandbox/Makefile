@@ -5,9 +5,10 @@ CFLAGS := -Wall -Werror -fpic -fvisibility=hidden -fno-builtin -nostdlib \
 	-I./ -Ifake-inc/ -fno-builtin -I../loader -fno-exceptions
 
 libtongdao_so_OBJS := bootstrap.o seccomp.o filter.o bridge.o \
-	syscall-trampo.o tinylibc.o sig-trampo.o tinymalloc.o scout.o
+	syscall-trampo.o tinylibc.o sig-trampo.o tinymalloc.o scout.o \
+	../toolkits/msghelper.o
 
-all:: libtongdao.so syscall-trampo.bin
+all:: libtongdao.so syscall-trampo.bin test_tinymalloc
 
 libtongdao.so:  $(libtongdao_so_OBJS)
 	$(CXX) -nostartfiles -shared -o $@ $(libtongdao_so_OBJS)
@@ -41,6 +42,9 @@ tinymalloc.o: tinymalloc.cpp
 
 scout.o: scout.cpp scout.h
 	$(CXX) $(CFLAGS) -c $< -I../toolkits
+
+test_tinymalloc: tinymalloc.cpp
+	$(CXX) -o $@ -DTEST -g tinymalloc.cpp
 
 clean::
 	rm -f *~ *.o libtongdao.so syscall-trampo.bin

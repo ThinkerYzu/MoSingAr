@@ -1,5 +1,5 @@
-/* -*- Mode: C++; Tab-Width: 8; Indent-Tabs-Mode: Nil; C-Basic-Offset: 2 -*-
- * Vim: Set Ts=8 Sts=2 Et Sw=2 Tw=80:
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ * vim: set ts=8 sts=2 et sw=2 tw=80:
  */
 #include <stdio.h>
 #include <unistd.h>
