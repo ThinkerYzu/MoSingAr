@@ -7,6 +7,8 @@
 
 #include "msghelper.h"
 
+#include "log.h"
+
 #include <sys/socket.h>
 #include <asm/unistd.h>
 
@@ -33,6 +35,7 @@ int sandbox_bridge::send_open(const char* path, int flags, mode_t mode) {
 }
 
 int sandbox_bridge::send_openat(int dirfd, const char* path, int flags, mode_t mode) {
+  LOGU(send_openat);
   auto pack = tinypacker()
     .field(scout::cmd_openat)
     .field(dirfd)
@@ -40,9 +43,27 @@ int sandbox_bridge::send_openat(int dirfd, const char* path, int flags, mode_t m
     .field(flags)
     .field(mode);
   auto buf = pack.pack_size_prefix();
-  send_msg(sock, buf, pack.get_size_prefix());
+  send_msg(sock, buf, pack.get_size_prefix(), dirfd);
   free(buf);
-  return 0;
+
+  rcvr->receive_one();
+  assert(rcvr->get_data_bytes() == 2 * sizeof(int));
+  auto ptr = rcvr->get_data();
+  auto ptr_end = ptr + rcvr->get_data_bytes();
+  assert((int)(*(int*)ptr + sizeof(int)) == rcvr->get_data_bytes());
+  ptr += sizeof(int);
+
+  int r;
+  auto unpacker = tinyunpacker(ptr, ptr_end - ptr)
+    .field(r);
+  assert(unpacker.check_completed());
+  unpacker.unpack();
+  if (r >= 0) {
+    assert(rcvr->get_fd_rcvd_num() == 1);
+    r = rcvr->get_fd_rcvd()[0];
+  }
+
+  return r;
 }
 
 int sandbox_bridge::send_dup(int oldfd) {
@@ -63,7 +84,25 @@ int sandbox_bridge::send_access(const char* path, int mode) {
   auto buf = pack.pack_size_prefix();
   send_msg(sock, buf, pack.get_size_prefix());
   free(buf);
-  return 0;
+
+  // Receive reply
+  auto ok = rcvr->receive_one();
+  if (!ok) {
+    return -1;
+  }
+  assert(rcvr->get_data_bytes() == sizeof(int) * 2);
+  auto ptr = rcvr->get_data();
+  assert(*(int*)ptr == sizeof(int));
+  ptr += sizeof(int);
+
+  int r;
+  auto unpacker = tinyunpacker(ptr, sizeof(int))
+    .field(r);
+
+  assert(unpacker.check_completed());
+  unpacker.unpack();
+
+  return r;
 }
 
 int sandbox_bridge::send_fstat(int fd, struct stat* statbuf) {
@@ -109,6 +148,7 @@ int sandbox_bridge::send_lstat(const char* path, struct stat* statbuf) {
  * trampoline program.
  */
 int sandbox_bridge::send_execve(const char* filename, char*const* argv, char*const* envp) {
+  LOGU(sandbox_bridge::send_execve);
   auto pid = SYSCALL(__NR_getpid);
   if (pid < 0) {
     return pid;
@@ -118,12 +158,15 @@ int sandbox_bridge::send_execve(const char* filename, char*const* argv, char*con
     .field((int)pid)
     .field(filename);
   auto buf = pack.pack_size_prefix();
+  LOGU(send_msg);
   send_msg(sock, buf, pack.get_size_prefix());
   auto ok = rcvr->receive_one();
   if (!ok) {
+    LOGU(!ok);
     return -1;
   }
 
+  return 0;
   auto r = SYSCALL(__NR_execve, filename, argv, envp);
   return r;
 }
@@ -162,4 +205,21 @@ void sandbox_bridge::set_sock(int fd) {
   // This instance is never deleted.
   auto buf = malloc(sizeof(msg_receiver));
   rcvr = new(buf) msg_receiver(fd);
+}
+
+int
+sandbox_bridge::send_rt_sigaction(int signum,
+                                  const struct sigaction* act,
+                                  struct sigaction* oldact,
+                                  size_t sigsetsz) {
+  if (signum == SIGSYS && act != nullptr) {
+    // Just skip it for now.
+    // We need a better implementation to call user's handler.
+    return 0;
+  }
+  return SYSCALL(__NR_rt_sigaction,
+                 (long)signum,
+                 (long)act,
+                 (long)oldact,
+                 (long)sigsetsz);
 }

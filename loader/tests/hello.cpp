@@ -7,5 +7,8 @@
 int
 main(int argc, char*const* argv) {
   printf("hello\n");
+  printf("sleep 30s\n");
+  fflush(stdout);
   sleep(30);
+  printf("bye\n");
 }

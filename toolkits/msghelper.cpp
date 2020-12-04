@@ -21,7 +21,6 @@
     }                              \
   } while(0)
 
-
 int
 send_msg(int sock, void* buf, int bufsz, int sendfd1, int sendfd2) {
   auto cmsgcnt = 0;
@@ -36,7 +35,13 @@ send_msg(int sock, void* buf, int bufsz, int sendfd1, int sendfd2) {
     cmsgsz = 0;
   }
   iovec vec = { buf, (size_t)bufsz };
-  msghdr msg = { nullptr, 0, &vec, 1, cmsg_buf, (size_t)cmsgsz, 0 };
+  msghdr msg = { nullptr,
+                 0,
+                 &vec,
+                 1,
+                 cmsgcnt ? cmsg_buf : nullptr,
+                 cmsgcnt ? (size_t)cmsgsz: 0,
+                 0 };
 
   if (cmsgcnt > 0) {
     auto cmsg = CMSG_FIRSTHDR(&msg);

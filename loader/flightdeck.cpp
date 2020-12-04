@@ -5,6 +5,8 @@
 #include "ptracetools.h"
 #include "loader.h"
 
+#include "errhandle.h"
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -19,15 +21,6 @@
 
 #include <sys/mman.h>
 
-
-#define _E(name, args...) do {                  \
-    auto r = name(args); \
-    if (r < 0) { perror(#name); return r; } \
-  } while( 0)
-#define _ENull(name, args...) do {                  \
-    auto r = name(args); \
-    if (r < 0) { perror(#name); return nullptr; } \
-  } while( 0)
 
 extern "C" {
 extern void shellcode_funcall_trap();
@@ -142,7 +135,7 @@ public:
   int parse_header() {
     assert(fd >= 0);
     assert(!hdr_valid);
-    _E(read, fd, &hdr, sizeof(hdr));
+    _EI(read, fd, &hdr, sizeof(hdr));
     hdr_valid = true;
     return 0;
   }
@@ -153,10 +146,10 @@ public:
     assert(phdrs == nullptr);
     assert(hdr.e_phentsize == sizeof(*phdrs));
 
-    _E(lseek, fd, hdr.e_phoff, SEEK_SET);
+    _EI(lseek, fd, hdr.e_phoff, SEEK_SET);
     auto bytes = hdr.e_phentsize * hdr.e_phnum;
     phdrs = new Elf64_Phdr[hdr.e_phnum];
-    _E(read, fd, phdrs, bytes);
+    _EI(read, fd, phdrs, bytes);
 
     return 0;
   }
@@ -182,8 +175,8 @@ public:
         dyn_num = bytes / sizeof(Elf64_Dyn);
         assert((bytes % sizeof(Elf64_Dyn)) == 0);
         dyns = new Elf64_Dyn[dyn_num];
-        _E(lseek, fd, phdr->p_offset, SEEK_SET);
-        _E(read, fd, dyns, bytes);
+        _EI(lseek, fd, phdr->p_offset, SEEK_SET);
+        _EI(read, fd, dyns, bytes);
         break;
       }
     }
@@ -204,10 +197,10 @@ public:
     assert(shdrs == nullptr);
     assert(hdr.e_shentsize == sizeof(*shdrs));
 
-    _E(lseek, fd, hdr.e_shoff, SEEK_SET);
+    _EI(lseek, fd, hdr.e_shoff, SEEK_SET);
     auto bytes = hdr.e_shentsize * hdr.e_shnum;
     shdrs = new Elf64_Shdr[hdr.e_shnum];
-    _E(read, fd, shdrs, bytes);
+    _EI(read, fd, shdrs, bytes);
 
     return 0;
   }
@@ -230,8 +223,8 @@ public:
     shstrtab = new char[shdr->sh_size];
     shstrtab_bytes = shdr->sh_size;
 
-    _E(lseek, fd, shdr->sh_offset, SEEK_SET);
-    _E(read, fd, shstrtab, shdr->sh_size);
+    _EI(lseek, fd, shdr->sh_offset, SEEK_SET);
+    _EI(read, fd, shstrtab, shdr->sh_size);
 
     return 0;
   }
@@ -271,8 +264,8 @@ public:
     assert(shdr->sh_entsize == sizeof(Elf64_Sym));
     dynsym_num = shdr->sh_size / shdr->sh_entsize;
     dynsym = new Elf64_Sym[dynsym_num];
-    _E(lseek, fd, shdr->sh_offset, SEEK_SET);
-    _E(read, fd, dynsym, shdr->sh_size);
+    _EI(lseek, fd, shdr->sh_offset, SEEK_SET);
+    _EI(read, fd, dynsym, shdr->sh_size);
     return 0;
   }
 
@@ -293,8 +286,8 @@ public:
     assert(dynstr_ndx >= 0);
     auto shdr = get_sect_headers() + dynstr_ndx;
     dynstr = new char[shdr->sh_size];
-    _E(lseek, fd, shdr->sh_offset, SEEK_SET);
-    _E(read, fd, dynstr, shdr->sh_size);
+    _EI(lseek, fd, shdr->sh_offset, SEEK_SET);
+    _EI(read, fd, dynstr, shdr->sh_size);
     dynstr_bytes = shdr->sh_size;
     return 0;
   }

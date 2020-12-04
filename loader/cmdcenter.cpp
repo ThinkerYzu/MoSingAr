@@ -8,8 +8,14 @@
 #include "tinypack.h"
 #include "msghelper.h"
 
+#include "log.h"
+#include "errhandle.h"
+
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <asm/unistd.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
@@ -21,21 +27,8 @@
 #include <memory>
 #include <algorithm>
 
-#define _E(name, args...)                       \
-  do {                                          \
-    auto r = name(args);                        \
-    if (r < 0) { perror(#name); return false; } \
-  } while( 0)
-#define _EI(name, args...)                      \
-  do {                                          \
-    auto r = name(args);                        \
-    if (r < 0) { perror(#name); return r; }     \
-  } while( 0)
-#define _EA(name, args...)                      \
-  do {                                          \
-    auto r = name(args);                        \
-    if (r < 0) { perror(#name); abort(); }      \
-  } while( 0)
+
+bool sigchld_ignore = false;
 
 cmdcenter::cmdcenter(int fd)
   : stopping_message(false)
@@ -79,6 +72,9 @@ cmdcenter::handle_message() {
   int num = epoll_wait(efd, events, max_events, -1);
   if (num < 0) {
     if (errno == EINTR) {
+      if (stopping_message) {
+        return false;
+      }
       goto retry_intr;
     }
     perror("epoll_wait");
@@ -150,9 +146,15 @@ cmdcenter::handle_exec(pid_t pid, int sock) {
 
   _E(ptrace, PTRACE_SETOPTIONS, pid, 0, 0);
 
-  ptrace_cont(pid);
+  // Enable SIGCHLD handler before detaching in case of any lost
+  // signals.
+  sigchld_ignore = false;
 
-  ptrace(PTRACE_DETACH, pid, nullptr, nullptr);
+  r = ptrace(PTRACE_DETACH, pid, nullptr, nullptr);
+  if (r < 0) {
+    perror("ptrace PTRACE_DETACH");
+    return false;
+  }
 
   return true;
 }
@@ -279,6 +281,7 @@ cmdcenter::handle_carrier_msg() {
 
 bool
 cmdcenter::handle_scout_msg(int sock) {
+  LOGU(handle_scout_msg);
   auto rcvr = std::make_unique<msg_receiver>(sock);
   auto ok = rcvr->receive_one();
   if (!ok) {
@@ -300,21 +303,64 @@ cmdcenter::handle_scout_msg(int sock) {
     assert(rcvr->get_fd_rcvd_num() == 0);
     break;
 
-  case scout::cmd_access:
+  case scout::cmd_openat:
     {
-      char* path;
-      int mode;
-      auto unpacker = tinyunpacker(ptr, payload_bytes)
+      LOGU(cmd_openat);
+      int dirfd;
+      const char* path;
+      int flags;
+      mode_t mode;
+      auto unpacker = tinyunpacker(ptr, data_end - ptr)
+        .field(dirfd)
         .field(path)
+        .field(flags)
         .field(mode);
 
       assert(unpacker.check_completed());
       unpacker.unpack();
 
-      auto r = access(path, mode);
+      assert(rcvr->get_fd_rcvd_num() == 1 || dirfd < 0);
+      if (dirfd >= 0) {
+        dirfd = rcvr->get_fd_rcvd()[0];
+      }
+
+      auto r = openat(dirfd, path, flags, mode);
+      if (r < 0) {
+        r = -errno;
+      }
 
       auto packer = tinypacker()
         .field(r);
+      auto reply = packer.pack_size_prefix();
+      _E(send_msg, sock, reply, packer.get_size_prefix(), r);
+
+      free((void*)path);
+      free(reply);
+    }
+    break;
+
+  case scout::cmd_access:
+    {
+      LOGU(cmd_access);
+      char* path;
+      int mode;
+      auto unpacker = tinyunpacker(ptr, data_end -ptr)
+        .field(path)
+        .field(mode);
+
+      assert(unpacker.check_completed());
+      unpacker.unpack();
+      LOGU(access);
+
+      auto r = access(path, mode);
+      if (r < 0) {
+        r = -errno;
+      }
+
+      LOGU(packer);
+      auto packer = tinypacker()
+        .field(r);
+      packer.pack();
       auto result = packer.pack_size_prefix();
       send_msg(sock, result, packer.get_size_prefix());
 

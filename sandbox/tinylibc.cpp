@@ -92,7 +92,10 @@ sigaction(int signum, const struct sigaction* act, struct sigaction* oldact) {
     kact.sa_mask = act->sa_mask;
   }
 
-  auto r = SYSCALL(__NR_rt_sigaction, signum, &kact, &koldact, 8);
+  auto r = SYSCALL(__NR_rt_sigaction, signum, act ? &kact : NULL,
+                   oldact ? &koldact : NULL, 8); // size of sigset
+                                                 // should be 8 for
+                                                 // Linux x86_64
 #ifndef NO_ERRNO
   if (r < 0) {
     errno = -r;

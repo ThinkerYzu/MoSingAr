@@ -1,4 +1,4 @@
-CFLAGS:= -fpic -Wall -Werror -g
+CFLAGS:= -fpic -Wall -Werror -g -I../toolkits
 BINS := test_ptracetools test_flightdeck carrier
 LIBS := libloader.so
 
@@ -26,13 +26,13 @@ carrier.o: carrier.cpp
 	$(CXX) $(CFLAGS) -c $<
 
 carrier: main.cpp libloader.so
-	$(CXX) -g -o $@ main.cpp libloader.so
+	$(CXX) -g -o $@ main.cpp libloader.so -I../toolkits
 
 cmdcenter.o: cmdcenter.cpp cmdcenter.h flightdeck.h
-	$(CXX) $(CFLAGS) -c $< -I../sandbox -I../toolkits
+	$(CXX) $(CFLAGS) -c $< -I../sandbox
 
 test_flightdeck: flightdeck.cpp ptracetools.o shellcode.o loader.o
-	$(CXX) -DTEST -o $@ $< ptracetools.o shellcode.o loader.o
+	$(CXX) -DTEST -o $@ $< ptracetools.o shellcode.o loader.o -I../toolkits
 
 test:: test_ptracetools test_flightdeck carrier
 	./test_ptracetools

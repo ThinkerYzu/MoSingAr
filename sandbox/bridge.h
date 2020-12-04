@@ -6,6 +6,7 @@
 
 #include <sys/types.h>
 #include <unistd.h>
+#include <signal.h>
 
 class msg_receiver;
 
@@ -23,6 +24,9 @@ public:
   size_t send_readlink(const char* path, char* buf, size_t bufsize);
   int send_unlink(const char* path);
   pid_t send_vfork();
+  int send_rt_sigaction(int signum, const struct sigaction* act,
+                        struct sigaction* oldact,
+                        size_t sigsetsz);
 
   void set_sock(int fd);
 

@@ -19,6 +19,7 @@
 #define assert(x) do { if (!(x)) { abort(); } } while(0)
 
 
+#if !defined(DUMMY)
 extern "C" {
 extern long syscall_trampoline(long, ...);
 // The syscall trampoline, it will point to a copy at a fixed address
@@ -27,6 +28,7 @@ long (*td__syscall_trampo)(long, ...) = syscall_trampoline;
 
 extern unsigned long int global_flags;
 }
+#endif
 
 scout::~scout() {
   if (sock != -1) {
@@ -88,6 +90,7 @@ scout::init_sandbox() {
 
   auto sigsys_r = install_sigsys();
   assert(sigsys_r);
+
   if (!(global_flags & FLAG_FILTER_INSTALLED)) {
     auto filter_r = install_seccomp_filter();
     assert(filter_r);

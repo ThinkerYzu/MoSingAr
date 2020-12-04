@@ -3,6 +3,8 @@
  */
 #include "carrier.h"
 
+#include "log.h"
+
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
@@ -14,7 +16,7 @@
 static pid_t childpid = -1;
 static carrier *carrier_ptr = nullptr;
 static int exitval = 255;
-bool sigchld_ignore = false;
+extern bool sigchld_ignore;
 
 void
 sigchld_handler(int signum, siginfo_t* info, void* ucontext) {
@@ -27,6 +29,10 @@ sigchld_handler(int signum, siginfo_t* info, void* ucontext) {
     printf("The child has been stopped by signum %d\n", WSTOPSIG(status));
   } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
     if (WIFSIGNALED(status)) {
+      if (WTERMSIG(status) == SIGSYS || WTERMSIG(status) == SIGSTOP) {
+        LOGU(SIGSYS || SIGSTOP);
+        return;
+      }
       printf("The child is terminated for signum %d\n", WTERMSIG(status));
     } else {
       exitval = WEXITSTATUS(status) & 0xff;

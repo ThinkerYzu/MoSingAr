@@ -5,6 +5,8 @@
 
 #include "bridge.h"
 
+#include "log.h"
+
 #include <unistd.h>
 #include <stdio.h>
 #include <signal.h>
@@ -24,6 +26,7 @@
 
 extern "C" {
 extern int seccomp(unsigned int, unsigned int, void *);
+extern long (*td__syscall_trampo)(long, ...);
 }
 
 static int
@@ -39,11 +42,16 @@ install_filter() {
 }
 
 static sandbox_bridge bridge;
+extern "C" {
+extern void printptr(void* p);
+}
 
 static void
 handle_syscall(siginfo_t* info, ucontext_t* context) {
+  LOGU(seccomp handle_syscall);
   auto ctx = context;
   auto syscall = SECCOMP_SYSCALL(ctx);
+
   switch (syscall) {
   case __NR_open:
     {
@@ -126,6 +134,29 @@ handle_syscall(siginfo_t* info, ucontext_t* context) {
       auto envp = (char *const*)SECCOMP_PARM3(ctx);
       auto r = bridge.send_execve(filename, argv, envp);
       SECCOMP_RESULT(ctx) = r;
+      // Call execve() through the syscall trampoline after leaving
+      // the handler, and return to the user space code.
+      //
+      // Without doing this, the SIGSYS signal that we are handling
+      // now, will be caught, and delivered after finishing execve().
+      // It causes a core dump once the SIGSYS has been removed from
+      // the signal masks.
+      if (r == 0) {
+        // make a frame to call the syscall trampoline
+        auto rsp = (void**)SECCOMP_REG(ctx, REG_RSP);
+        rsp -= 1;
+        *rsp = (void*)SECCOMP_IP(ctx);
+        SECCOMP_REG(ctx, REG_RSP) = (long long unsigned int)rsp;
+
+        // set arguments for the syscall trampoline
+        SECCOMP_REG(ctx, REG_RDI) = (long long unsigned int)__NR_execve;
+        SECCOMP_REG(ctx, REG_RSI) = (long long unsigned int)filename;
+        SECCOMP_REG(ctx, REG_RDX) = (long long unsigned int)argv;
+        SECCOMP_REG(ctx, REG_RCX) = (long long unsigned int)envp;
+
+        // return to the syscall trampoline
+        SECCOMP_IP(ctx) = (long long unsigned int)td__syscall_trampo;
+      }
     }
     break;
 
@@ -150,6 +181,17 @@ handle_syscall(siginfo_t* info, ucontext_t* context) {
   case __NR_vfork:
     {
       auto r = bridge.send_vfork();
+      SECCOMP_RESULT(ctx) = r;
+    }
+    break;
+
+  case __NR_rt_sigaction:
+    {
+      auto signum = (int)SECCOMP_PARM1(ctx);
+      auto act = (const struct sigaction*)SECCOMP_PARM2(ctx);
+      auto oldact = (struct sigaction*)SECCOMP_PARM3(ctx);
+      auto sigsetsz = (size_t)SECCOMP_PARM4(ctx);
+      auto r = bridge.send_rt_sigaction(signum, act, oldact, sigsetsz);
       SECCOMP_RESULT(ctx) = r;
     }
     break;

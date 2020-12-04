@@ -3,6 +3,8 @@
  */
 #include "scout.h"
 
+#include "log.h"
+
 #include "new"
 
 #include <stdlib.h>
@@ -30,6 +32,7 @@ unsigned long int global_flags __attribute__((visibility("default"))) = (unsigne
 class bootstrap {
 public:
   bootstrap() {
+    LOGU(bootstrap);
     // Neutralize the effects caused by the relocation.
     // Check the comment in the body of prepare_shellcode().
     global_flags -= (unsigned long int)&global_flags;

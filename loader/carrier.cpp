@@ -3,6 +3,8 @@
  */
 #include "carrier.h"
 
+#include "errhandle.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,19 +12,13 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#define _E(x, args...) \
-  do { \
-    auto r = x(args); \
-    if (r < 0) { perror(#x); abort(); } \
-  } while (0)
-
 
 carrier::carrier() {
   int socks[2];
-  _E(socketpair, AF_UNIX, SOCK_DGRAM, 0, socks);
-  _E(dup2, socks[1], CARRIER_SOCK);
-  _E(close, socks[1]);
-  _E(fcntl, socks[0], F_SETFD, FD_CLOEXEC);
+  _EA(socketpair, AF_UNIX, SOCK_DGRAM, 0, socks);
+  _EA(dup2, socks[1], CARRIER_SOCK);
+  _EA(close, socks[1]);
+  _EA(fcntl, socks[0], F_SETFD, FD_CLOEXEC);
 
   cc = new cmdcenter(socks[0]);
   cc->init();

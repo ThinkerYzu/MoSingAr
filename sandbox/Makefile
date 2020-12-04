@@ -2,7 +2,7 @@
 # -fno-exceptions to avoid the symbol __gxx_personality_v0 of personality routine.
 # see https://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html#base-personality
 CFLAGS := -Wall -Werror -fpic -fvisibility=hidden -fno-builtin -nostdlib \
-	-I./ -Ifake-inc/ -fno-builtin -I../loader -fno-exceptions
+	-I./ -Ifake-inc/ -fno-builtin -I../loader -fno-exceptions -I../toolkits
 
 libtongdao_so_OBJS := bootstrap.o seccomp.o filter.o bridge.o \
 	syscall-trampo.o tinylibc.o sig-trampo.o tinymalloc.o scout.o \
@@ -29,7 +29,7 @@ filter.o: filter.cpp seccomp.h
 	$(CXX) $(CFLAGS) -c $<
 
 bridge.o: bridge.cpp bridge.h
-	$(CXX) $(CFLAGS) -c $< -I../toolkits
+	$(CXX) $(CFLAGS) -c $<
 
 bootstrap.o: bootstrap.cpp
 	$(CXX) $(CFLAGS) -c $<
@@ -41,7 +41,7 @@ tinymalloc.o: tinymalloc.cpp
 	$(CXX) $(CFLAGS) -c $<
 
 scout.o: scout.cpp scout.h
-	$(CXX) $(CFLAGS) -c $< -I../toolkits
+	$(CXX) $(CFLAGS) -c $<
 
 test_tinymalloc: tinymalloc.cpp
 	$(CXX) -o $@ -DTEST -g tinymalloc.cpp

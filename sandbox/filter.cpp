@@ -22,13 +22,14 @@ static struct sock_filter filter[] = {
   BPF_JUMP(BPF_JMP | BPF_JGE | BPF_K, 4096, 2, 0),
   BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
            (offsetof(struct seccomp_data, instruction_pointer) + 4)),
-  BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, (uint32_t)(TRAMPOLINE_ADDR >> 32), 13, 0),
+  BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, (uint32_t)(TRAMPOLINE_ADDR >> 32), 14, 0),
 
-
+  // Load syscall number
   BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
            (offsetof(struct seccomp_data, nr))),
 
   // dup
+  BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_rt_sigaction, 13, 0),
   BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_dup, 12, 0),
   BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_dup2, 11, 0),
   BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_open, 10, 0),
