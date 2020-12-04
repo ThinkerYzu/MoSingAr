@@ -5,7 +5,9 @@ LIBS := libloader.so
 libloader_so_OBJS := ptracetools.o shellcode.o loader.o flightdeck.o \
 	carrier.o cmdcenter.o ../toolkits/msghelper.o
 
-all:: $(BINS) $(LIBS)
+.PHONY: all test tests clean
+
+all:: $(BINS) $(LIBS) tests
 
 libloader.so: $(libloader_so_OBJS)
 	$(CXX) $(CFLAGS) -shared -o $@ $(libloader_so_OBJS)
@@ -34,15 +36,19 @@ cmdcenter.o: cmdcenter.cpp cmdcenter.h flightdeck.h
 test_flightdeck: flightdeck.cpp ptracetools.o shellcode.o loader.o
 	$(CXX) -DTEST -o $@ $< ptracetools.o shellcode.o loader.o -I../toolkits
 
-test:: test_ptracetools test_flightdeck carrier
+test:: test_ptracetools test_flightdeck carrier tests
 	./test_ptracetools
 	@echo
 	../sandbox/tests/fake_cc ./test_flightdeck
 	@echo
 	LD_LIBRARY_PATH=../sandbox:./ ./carrier ./tests/hello
 
+tests:
+	$(MAKE) -C tests
+
 test_ptracetools: ptracetools.cpp shellcode.S
 	$(CXX) -o $@ -DTEST ptracetools.cpp shellcode.S
 
 clean::
 	rm -f *.o *~ $(BINS) $(LIBS)
+	$(MAKE) -C tests clean

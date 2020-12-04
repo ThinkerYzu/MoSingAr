@@ -8,6 +8,8 @@ libtongdao_so_OBJS := bootstrap.o seccomp.o filter.o bridge.o \
 	syscall-trampo.o tinylibc.o sig-trampo.o tinymalloc.o scout.o \
 	../toolkits/msghelper.o
 
+.PHONY: all clean test
+
 all:: libtongdao.so syscall-trampo.bin test_tinymalloc
 
 libtongdao.so:  $(libtongdao_so_OBJS)
@@ -48,3 +50,6 @@ test_tinymalloc: tinymalloc.cpp
 
 clean::
 	rm -f *~ *.o libtongdao.so syscall-trampo.bin
+
+test:
+	$(MAKE) -C tests test
