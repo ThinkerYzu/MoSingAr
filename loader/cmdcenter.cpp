@@ -30,6 +30,16 @@
 
 bool sigchld_ignore = false;
 
+template<typename T>
+int
+send_msg_packer(int sock, T& packer, int fd1 = -1, int fd2 = -1) {
+  auto reply = packer.pack_size_prefix();
+  int r = send_msg(sock, reply, packer.get_size_prefix(), fd1, fd2);
+
+  free(reply);
+  return r;
+}
+
 cmdcenter::cmdcenter(int fd)
   : stopping_message(false)
   , efd(-1)
@@ -110,6 +120,7 @@ cmdcenter::handle_messages() {
 
 bool
 cmdcenter::handle_exec(pid_t pid, int sock) {
+  LOGU(handle_exec);
   // Attach & trace the process
   _E(ptrace_attach, pid);
   ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEEXEC);
@@ -252,7 +263,7 @@ cmdcenter::start_mission(int argc, char*const* argv) {
     _EA(read, toffsocks[1], &buf, 1);
     _EA(close, toffsocks[1]);
 
-    _EA(execv, argv[0], argv);
+    _EA(execvpe, argv[0], argv, environ);
     // Should not be here!
   }
   return childpid;
@@ -324,15 +335,22 @@ cmdcenter::handle_scout_msg(int sock) {
         dirfd = rcvr->get_fd_rcvd()[0];
       }
 
-      auto r = openat(dirfd, path, flags, mode);
-      if (r < 0) {
-        r = -errno;
+      auto fd = openat(dirfd, path, flags, mode);
+      if (fd < 0) {
+        fd = -errno;
+      }
+      if (dirfd >= 0) {
+        close(dirfd);
       }
 
       auto packer = tinypacker()
-        .field(r);
+        .field(fd);
       auto reply = packer.pack_size_prefix();
-      _E(send_msg, sock, reply, packer.get_size_prefix(), r);
+      auto r = send_msg(sock, reply, packer.get_size_prefix(), fd);
+      close(fd);
+      if (r < 0) {
+        return false;
+      }
 
       free((void*)path);
       free(reply);
@@ -369,8 +387,90 @@ cmdcenter::handle_scout_msg(int sock) {
     }
     break;
 
+  case scout::cmd_fstat:
+    {
+      LOGU(cmd_fstat);
+      int fd;
+      auto unpacker = tinyunpacker(ptr, data_end - ptr)
+        .field(fd);
+
+      assert(unpacker.check_completed());
+      unpacker.unpack();
+      if (fd >= 0) {
+        if (rcvr->get_fd_rcvd_num() != 1) {
+          sleep(300);
+        }
+        assert(rcvr->get_fd_rcvd_num() == 1);
+        fd = rcvr->get_fd_rcvd()[0];
+      }
+
+      struct stat statbuf;
+      auto r = fstat(fd, &statbuf);
+      if (r < 0) {
+        r = -errno;
+      }
+      if (fd >= 0) {
+        close(fd);
+      }
+
+      auto packer = tinypacker()
+        .field(r)
+        .field(statbuf);
+      _E(send_msg_packer, sock, packer);
+    }
+    break;
+
+  case scout::cmd_stat:
+    {
+      LOGU(cmd_fstat);
+      const char* path;
+      auto unpacker = tinyunpacker(ptr, data_end - ptr)
+        .field(path);
+
+      assert(unpacker.check_completed());
+      unpacker.unpack();
+
+      struct stat statbuf;
+      auto r = stat(path, &statbuf);
+      if (r < 0) {
+        r = -errno;
+      }
+      free((void*)path);
+
+      auto packer = tinypacker()
+        .field(r)
+        .field(statbuf);
+      _E(send_msg_packer, sock, packer);
+    }
+    break;
+
+  case scout::cmd_lstat:
+    {
+      LOGU(cmd_fstat);
+      const char* path;
+      auto unpacker = tinyunpacker(ptr, data_end - ptr)
+        .field(path);
+
+      assert(unpacker.check_completed());
+      unpacker.unpack();
+
+      struct stat statbuf;
+      auto r = lstat(path, &statbuf);
+      if (r < 0) {
+        r = -errno;
+      }
+      free((void*)path);
+
+      auto packer = tinypacker()
+        .field(r)
+        .field(statbuf);
+      _E(send_msg_packer, sock, packer);
+    }
+    break;
+
   case scout::cmd_execve:
     {
+      LOGU(cmd_execve);
       char* path;
       int pid;
       auto unpacker = tinyunpacker(ptr, data_end - ptr)
@@ -389,6 +489,58 @@ cmdcenter::handle_scout_msg(int sock) {
         return false;
       }
 
+    }
+    break;
+
+  case scout::cmd_readlink:
+    {
+      LOGU(cmd_readlink);
+      const char* path;
+      size_t bufsize;
+      auto unpacker = tinyunpacker(ptr, data_end - ptr)
+        .field(path)
+        .field(bufsize);
+
+      assert(unpacker.check_completed());
+      unpacker.unpack();
+
+      auto buf = new char[bufsize];
+      auto retv = (int)readlink(path, buf, bufsize);
+      if (retv < 0) {
+        retv = -errno;
+      }
+
+      fixedbuf fbuf(buf, bufsize);
+      auto packer = tinypacker()
+        .field(retv)
+        .field(fbuf);
+      _E(send_msg_packer, sock, packer);
+
+      delete buf;
+      free((void*)path);
+    }
+    break;
+
+  case scout::cmd_unlink:
+    {
+      LOGU(cmd_unlink);
+      const char* path;
+      auto unpacker = tinyunpacker(ptr, data_end - ptr)
+        .field(path);
+
+      assert(unpacker.check_completed());
+      unpacker.unpack();
+
+      auto r = unlink(path);
+      if (r < 0) {
+        r = -errno;
+      }
+
+      auto packer = tinypacker()
+        .field(r);
+      _E(send_msg_packer, sock, packer);
+
+      free((void*)path);
     }
     break;
 

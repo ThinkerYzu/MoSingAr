@@ -22,13 +22,21 @@
 #if !defined(DUMMY)
 extern "C" {
 extern long syscall_trampoline(long, ...);
+extern long vfork_trampoline();
 // The syscall trampoline, it will point to a copy at a fixed address
 // later that the seccomp filter will always allow it.
 long (*td__syscall_trampo)(long, ...) = syscall_trampoline;
+long (*td__vfork_trampo)() = vfork_trampoline;
 
 extern unsigned long int global_flags;
 }
 #endif
+
+static scout* sScoutSingleton = nullptr;
+
+scout::scout() : sock(-1) {
+  sScoutSingleton = this;
+}
 
 scout::~scout() {
   if (sock != -1) {
@@ -72,7 +80,12 @@ scout::establish_cc_channel() {
   }
 
   close(socks[1]);
-  sock = socks[0];
+  if (sock != -1) {
+    dup2(socks[0], sock);
+    close(socks[0]);
+  } else {
+    sock = socks[0];
+  }
   fcntl(sock, F_SETFD, FD_CLOEXEC);
 
   return true;
@@ -112,6 +125,9 @@ scout::install_syscall_trampo() {
   assert(ptr == (void*)TRAMPOLINE_ADDR);
   memcpy(ptr, (void*)syscall_trampoline, 4096);
   td__syscall_trampo = (long(*)(long, ...))ptr;
+  td__vfork_trampo =
+    (long(*)())((char*)ptr +
+                ((char*)vfork_trampoline - (char*)syscall_trampoline));
   return true;
 }
 
@@ -128,6 +144,11 @@ bool
 scout::install_seccomp_filter() {
   ::install_seccomp_filter();
   return true;
+}
+
+scout*
+scout::getInstance() {
+  return sScoutSingleton;
 }
 
 #endif  // !DUMMY

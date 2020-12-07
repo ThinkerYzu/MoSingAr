@@ -18,3 +18,19 @@ syscall_trampoline:
 
         syscall
         ret
+
+/**
+ * vfork is a special case since the child and the parent using the same
+ * address space until next exec() at the child.  That means the data
+ * might be tainted by the child process, including the return address.
+ */
+#define __NR_vfork 58
+        .hidden vfork_trampoline
+        .global vfork_trampoline
+        .type vfork_trampoline, @function
+vfork_trampoline:
+        mov     $__NR_vfork, %rax
+        popq    %rdi
+        syscall
+        pushq   %rdi
+        ret

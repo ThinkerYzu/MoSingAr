@@ -2,13 +2,14 @@
  * vim: set ts=8 sts=2 et sw=2 tw=80:
  */
 #include "seccomp.h"
-
 #include "bridge.h"
+#include "scout.h"
 
 #include "log.h"
 
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <asm/unistd.h>
 #include <string.h>
@@ -22,12 +23,27 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include <stdlib.h>
+#define assert(x)                  \
+  do {                             \
+    if (!(x)) {                    \
+      write(2, "assertion: ", 11); \
+      write(2, #x, strlen(#x));    \
+      char lf = '\n';              \
+      write(2, &lf, 1);            \
+      abort();                     \
+    }                              \
+  } while(0)
+
 
 extern "C" {
 extern int seccomp(unsigned int, unsigned int, void *);
 extern long (*td__syscall_trampo)(long, ...);
+extern long (*td__vfork_trampo)();
+extern int fakeframe_trampoline();
 }
+
+#define SYSCALL td__syscall_trampo
+#define VFORK() td__vfork_trampo()
 
 static int
 install_filter() {
@@ -44,6 +60,72 @@ install_filter() {
 static sandbox_bridge bridge;
 extern "C" {
 extern void printptr(void* p);
+}
+
+static long
+vfork_handler(char *rsp, char *old_rsp) {
+  static char buf[256];
+
+  LOGU(vfork_handler);
+
+  auto pid = VFORK();
+  if (pid == 0) {
+    scout::getInstance()->establish_cc_channel();
+    int keep_size = old_rsp - rsp;
+    assert(keep_size <= (int)(256 - sizeof(void*) * 2));
+    auto src = (void**)rsp;
+    auto ptr = (void**)buf;
+    *ptr++ = (void*)(long)keep_size;
+    *ptr++ = rsp;
+    for (int i = 0; i < keep_size; i += sizeof(void*)) {
+      *ptr++ = *src++;
+    }
+  } else if (pid > 0) {
+    LOGU(parent);
+    auto src = (void**)buf;
+    long restore_size = (long)*src++;
+    auto ptr = (void**)*src++;
+    for (int i = 0; i < restore_size; i += sizeof(void*)) {
+      *ptr++ = *src++;
+    }
+  }
+  return pid;
+}
+
+static void
+install_fakeframe(ucontext_t* ctx, void* user_handler, void* saved_rsp = nullptr) {
+  // Call the user handler after leaving the signal handler, and
+  // return to the user space code.
+
+  //
+  // make a fake frame to call the user handler
+  //
+  {
+    auto rsp = (void**)SECCOMP_REG(ctx, REG_RSP);
+
+    // Return to the caller from the fake frame
+    *--rsp = (void*)SECCOMP_IP(ctx);
+    // Restore rsp
+    *--rsp = saved_rsp ? saved_rsp : (void*)SECCOMP_REG(ctx, REG_RSP);
+    // Restore registers
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_R11);
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_R10);
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_R9);
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_R8);
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_RDX);
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_RCX);
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_RBX);
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_RSI);
+    *--rsp = (void*)SECCOMP_REG(ctx, REG_RDI);
+    // Return to the fake frame trampoline
+    *--rsp = (void*)fakeframe_trampoline;
+
+    // Set the stack pointer
+    SECCOMP_REG(ctx, REG_RSP) = (long long unsigned int)rsp;
+  }
+
+  // Return to the handler
+  SECCOMP_IP(ctx) = (long long unsigned int)user_handler;
 }
 
 static void
@@ -129,6 +211,7 @@ handle_syscall(siginfo_t* info, ucontext_t* context) {
 
   case __NR_execve:
     {
+      LOGU(__NR_execve);
       auto filename = (const char*)SECCOMP_PARM1(ctx);
       auto argv = (char *const*)SECCOMP_PARM2(ctx);
       auto envp = (char *const*)SECCOMP_PARM3(ctx);
@@ -136,26 +219,18 @@ handle_syscall(siginfo_t* info, ucontext_t* context) {
       SECCOMP_RESULT(ctx) = r;
       // Call execve() through the syscall trampoline after leaving
       // the handler, and return to the user space code.
-      //
-      // Without doing this, the SIGSYS signal that we are handling
-      // now, will be caught, and delivered after finishing execve().
-      // It causes a core dump once the SIGSYS has been removed from
-      // the signal masks.
       if (r == 0) {
-        // make a frame to call the syscall trampoline
-        auto rsp = (void**)SECCOMP_REG(ctx, REG_RSP);
-        rsp -= 1;
-        *rsp = (void*)SECCOMP_IP(ctx);
-        SECCOMP_REG(ctx, REG_RSP) = (long long unsigned int)rsp;
+        static char altstack[1024];
+        auto saved_rsp = SECCOMP_REG(ctx, REG_RSP);
+        SECCOMP_REG(ctx, REG_RSP) = (long long unsigned int)(altstack + 1024 - sizeof(void*));
+
+        install_fakeframe(ctx, (void*)td__syscall_trampo, (void*)saved_rsp);
 
         // set arguments for the syscall trampoline
         SECCOMP_REG(ctx, REG_RDI) = (long long unsigned int)__NR_execve;
         SECCOMP_REG(ctx, REG_RSI) = (long long unsigned int)filename;
         SECCOMP_REG(ctx, REG_RDX) = (long long unsigned int)argv;
         SECCOMP_REG(ctx, REG_RCX) = (long long unsigned int)envp;
-
-        // return to the syscall trampoline
-        SECCOMP_IP(ctx) = (long long unsigned int)td__syscall_trampo;
       }
     }
     break;
@@ -180,8 +255,21 @@ handle_syscall(siginfo_t* info, ucontext_t* context) {
 
   case __NR_vfork:
     {
+      LOGU(__NR_vfork);
+#if 0
       auto r = bridge.send_vfork();
+#endif
+      auto r = 0L;
       SECCOMP_RESULT(ctx) = r;
+      // Call vfork() after leaving the handler, and return to the
+      // user space code.
+      static char altstack[1024];
+      auto saved_rsp = SECCOMP_REG(ctx, REG_RSP);
+      SECCOMP_REG(ctx, REG_RSP) = (long long unsigned int)(altstack + 1024 - sizeof(void*));
+
+      install_fakeframe(ctx, (void*)vfork_handler, (void*)saved_rsp);
+      SECCOMP_PARM1(ctx) = SECCOMP_REG(ctx, REG_RSP);
+      SECCOMP_PARM2(ctx) = (long long unsigned int)(altstack + 1024 - sizeof(void*));
     }
     break;
 

@@ -30,7 +30,7 @@ public:
     cmd_vfork
   };
 
-  scout() : sock(-1) {}
+  scout();
   ~scout();
 
   bool init_sandbox();
@@ -46,6 +46,8 @@ public:
   bool install_seccomp_filter();
 
   bool prepare_exec();
+
+  static scout* getInstance();
 
 private:
   int sock;

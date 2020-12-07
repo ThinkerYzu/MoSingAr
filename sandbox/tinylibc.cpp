@@ -230,4 +230,15 @@ ssize_t recvmsg(int sockfd, struct msghdr* msg, int flags) {
   return r;
 }
 
+pid_t getpid(void) {
+  auto r = SYSCALL(__NR_getpid);
+#ifndef NO_ERRNO
+  if (r < 0) {
+    errno = -r;
+    r = -1;
+  }
+#endif
+  return r;
+}
+
 }

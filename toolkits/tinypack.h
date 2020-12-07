@@ -37,7 +37,7 @@ public:
   static void writebuf(T v, char* writeto) {
     memcpy(writeto, &v, sizeof(T));
   }
-  static int rsize(const char* readfrom, unsigned int size) {
+  static int rsize(T* v, const char* readfrom, unsigned int size) {
     if (size < sizeof(T)) {
       return -1;
     }
@@ -59,7 +59,7 @@ public:
     memcpy(writeto, &sz, sizeof(unsigned int));
     memcpy(writeto + sizeof(unsigned int), v, sz);
   }
-  static int rsize(const char* readfrom, unsigned int size) {
+  static int rsize(const char** v, const char* readfrom, unsigned int size) {
     if (size < sizeof(unsigned int)) {
       return -1;
     }
@@ -71,6 +71,9 @@ public:
     }
     return fullsize;
   }
+  static int rsize(char** v, const char* readfrom, unsigned int size) {
+    return rsize((const char**)v, readfrom, size);
+  }
   static void readbuf(const char*&v, const char* readfrom) {
     unsigned int sz;
     memcpy(&sz, readfrom, sizeof(unsigned int));
@@ -80,6 +83,44 @@ public:
   }
   static void readbuf(char*&v, const char* readfrom) {
     readbuf(*(const char**)&v, readfrom);
+  }
+};
+
+struct fixedbuf {
+  fixedbuf(char* buf, int sz)
+    : buf(buf)
+    , size(sz) {}
+  fixedbuf(const fixedbuf& other)
+    : buf(other.buf)
+    , size(other.size) {}
+
+  char* buf;
+  int size;
+};
+
+template<>
+class tinypack_value_trait<fixedbuf> {
+public:
+  static int size(const fixedbuf& v) {
+    return v.size + sizeof(unsigned int);
+  }
+  static void writebuf(const fixedbuf& v, char* writeto) {
+    memcpy(writeto, &v.size, sizeof(unsigned int));
+    memcpy(writeto + sizeof(unsigned int), v.buf, v.size);
+  }
+  static int rsize(const fixedbuf* v, const char* readfrom, unsigned int size) {
+    if (size < sizeof(unsigned int)) {
+      return -1;
+    }
+    unsigned int rcvd_sz;
+    memcpy(&rcvd_sz, readfrom, sizeof(unsigned int));
+    if ((unsigned int)v->size != rcvd_sz) {
+      return -1;
+    }
+    return rcvd_sz + sizeof(unsigned int);
+  }
+  static void readbuf(fixedbuf& v, const char* readfrom) {
+    memcpy(v.buf, readfrom + sizeof(unsigned int), v.size);
   }
 };
 
@@ -120,7 +161,7 @@ public:
 
   char* pack_size_prefix() {
     auto sz = get_size();
-    auto buf = (char*)malloc((unsigned int) + sz);
+    auto buf = (char*)malloc(sizeof(unsigned int) + sz);
     memcpy(buf, &sz, sizeof(unsigned int));
     writebuf(buf + sizeof(unsigned int));
     return buf;
@@ -176,7 +217,7 @@ public:
     return sz;
   }
   int value_size(const char* buf, unsigned int bufsz) {
-    return tinypack_value_trait<T>::rsize(buf, bufsz);
+    return tinypack_value_trait<T>::rsize(value, buf, bufsz);
   }
 
   void unpack(const char* buf, unsigned int bufsz) {

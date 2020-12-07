@@ -26,14 +26,14 @@ sigchld_handler(int signum, siginfo_t* info, void* ucontext) {
   }
   auto status = info->si_status;
   if (WIFSTOPPED(status)) {
-    printf("The child has been stopped by signum %d\n", WSTOPSIG(status));
+    printf("The child %d has been stopped by signum %d\n", info->si_pid, WSTOPSIG(status));
   } else if (WIFEXITED(status) || WIFSIGNALED(status)) {
     if (WIFSIGNALED(status)) {
       if (WTERMSIG(status) == SIGSYS || WTERMSIG(status) == SIGSTOP) {
         LOGU(SIGSYS || SIGSTOP);
         return;
       }
-      printf("The child is terminated for signum %d\n", WTERMSIG(status));
+      printf("The child %d is terminated for signum %d\n", info->si_pid, WTERMSIG(status));
     } else {
       exitval = WEXITSTATUS(status) & 0xff;
     }

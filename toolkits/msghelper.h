@@ -11,7 +11,7 @@ extern int send_msg(int sock, void* buf, int bufsz, int sendfd1 = -1, int sendfd
  */
 class msg_receiver {
 public:
-  constexpr static int data_buf_size = 1024;
+  constexpr static int data_buf_size = 1024 * 8;
   // It can handle at most 2 FDs in a message.
   constexpr static int fd_rcvd_size = 2;
 

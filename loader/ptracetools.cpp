@@ -170,6 +170,15 @@ ptrace_waittrap(pid_t pid) {
       return -1;
     }
     if (WIFSTOPPED(status) && WSTOPSIG(status) != SIGTRAP) {
+      if (WSTOPSIG(status) == SIGSYS) {
+        // This can happen when an exec follow immediately a vfork.
+        //
+        // XXX: For some unknown reasons, SIGSYS will be delivered
+        // again after execve() in this sequence.  I want to look into
+        // details later.
+        ptrace_cont(pid);
+        continue;
+      }
       fprintf(stderr, "The process %d has been stopped with by signum %d!\n",
               pid, WSTOPSIG(status));
       return -1;
