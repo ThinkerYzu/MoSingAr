@@ -192,7 +192,7 @@ int sandbox_bridge::send_lstat(const char* path, struct stat* statbuf) {
  * The bridge handles |execve()| by executing a trampoline program,
  * that in turn will execute the program that the caller want to
  * execute after setting |LD_PRELOAD| environment variable properly to
- * make sure libtongdao.so being loaded and setting a sandbox.
+ * make sure libmosingar.so being loaded and setting a sandbox.
  *
  * The filter will trap all |execve()| calls except ones running the
  * trampoline program.

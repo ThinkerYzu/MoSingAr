@@ -336,7 +336,7 @@ private:
   int dynstr_bytes;
 };
 
-const char* libtongdao_so_path = "../sandbox/libtongdao.so";
+const char* libmosingar_so_path = "../sandbox/libmosingar.so";
 
 namespace {
 /**
@@ -369,7 +369,7 @@ namespace {
  */
 static trapped_shellcode*
 prepare_shellcode(unsigned long global_flags) {
-  auto so_path = libtongdao_so_path;
+  auto so_path = libmosingar_so_path;
 
   ElfParser solib(so_path);
   solib.open();
@@ -573,7 +573,7 @@ namespace flightdeck {
  * Make a scout taking off for a subject/process.
  *
  * |scout_takeoff()| inject the loader to the target prcoess to load
- * libtongdao.so sandboxing the process.
+ * libmosingar.so sandboxing the process.
  */
 long
 scout_takeoff(pid_t pid, unsigned long global_flags) {

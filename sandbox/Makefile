@@ -5,16 +5,16 @@ CFLAGS := -Wall -Werror -fpic -fvisibility=hidden -fno-builtin -nostdlib \
 	-I./ -Ifake-inc/ -fno-builtin -I../loader -fno-exceptions -I../toolkits \
 	-fno-stack-protector
 
-libtongdao_so_OBJS := bootstrap.o seccomp.o filter.o bridge.o \
+libmosingar_so_OBJS := bootstrap.o seccomp.o filter.o bridge.o \
 	syscall-trampo.o tinylibc.o sig-trampo.o tinymalloc.o scout.o \
 	../toolkits/msghelper.o fakeframe-trampo.o
 
 .PHONY: all clean test
 
-all:: libtongdao.so syscall-trampo.bin test_tinymalloc
+all:: libmosingar.so syscall-trampo.bin test_tinymalloc
 
-libtongdao.so:  $(libtongdao_so_OBJS)
-	$(CXX) -nostartfiles -shared -o $@ $(libtongdao_so_OBJS)
+libmosingar.so:  $(libmosingar_so_OBJS)
+	$(CXX) -nostartfiles -shared -o $@ $(libmosingar_so_OBJS)
 
 syscall-trampo.bin: syscall-trampo.o
 	objcopy  -j .text -O binary syscall-trampo.o syscall-trampo.bin
@@ -53,7 +53,7 @@ test_tinymalloc: tinymalloc.cpp
 	$(CXX) -o $@ -DTEST -g tinymalloc.cpp
 
 clean::
-	rm -f *~ *.o libtongdao.so syscall-trampo.bin
+	rm -f *~ *.o libmosingar.so syscall-trampo.bin
 
 test:
 	$(MAKE) -C tests test

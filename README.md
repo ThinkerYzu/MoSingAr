@@ -1,6 +1,6 @@
-# TongDao
+# MoSingAr
 
-TongDao is a tool to connect two or more Linux machines as one
+MoSingAr is a tool to connect two or more Linux machines as one
 machine, so that you can run programs at remote like at the local
 machine.  All files; binaries, libraries, and data files, will read
 from the local, but the processes are created at remote machines.
