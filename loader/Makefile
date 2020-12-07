@@ -42,6 +42,13 @@ test:: test_ptracetools test_flightdeck carrier tests
 	../sandbox/tests/fake_cc ./test_flightdeck
 	@echo
 	LD_LIBRARY_PATH=../sandbox:./ ./carrier ./tests/hello
+	@echo
+	LD_LIBRARY_PATH=../sandbox:./ ./carrier ./tests/test_execvpe
+	@echo
+	rm -f hello.o; \
+	LD_LIBRARY_PATH=../sandbox:./ \
+	  ./carrier /usr/bin/gcc -c tests/hello.cpp; \
+	if [ -e hello.o ]; then echo "OK"; else echo "FAILED"; fi
 
 tests:
 	$(MAKE) -C tests

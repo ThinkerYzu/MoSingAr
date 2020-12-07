@@ -121,6 +121,7 @@ cmdcenter::handle_messages() {
 bool
 cmdcenter::handle_exec(pid_t pid, int sock) {
   LOGU(handle_exec);
+
   // Attach & trace the process
   _E(ptrace_attach, pid);
   ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEEXEC);
@@ -136,24 +137,28 @@ cmdcenter::handle_exec(pid_t pid, int sock) {
   if (evt < 0) {
     return false;
   }
-  assert(evt == PTRACE_EVENT_EXEC);
+  if (evt == PTRACE_EVENT_EXEC) {
+    // Run the first instruction of the tracee before code injection.
+    //
+    // This is required to set the values of registers correctly for the
+    // injected code.  Without this, PTRACE_SETREGS will take no
+    // effects.  I guess it is overwrote by the kernel since kernel
+    // haven't returned to the user space of the process, and it may set
+    // the registers with values when it returns to the user space first
+    // time.
+    _E(ptrace_stepi, pid);
 
-  // Run the first instruction of the tracee before code injection.
-  //
-  // This is required to set the values of registers correctly for the
-  // injected code.  Without this, PTRACE_SETREGS will take no
-  // effects.  I guess it is overwrote by the kernel since kernel
-  // haven't returned to the user space of the process, and it may set
-  // the registers with values when it returns to the user space first
-  // time.
-  auto r = ptrace_stepi(pid);
-  if (r < 0) {
-    return false;
+    // Install the signal handler and establish a channel, but not
+    // install the seccomp filter.
+    _E(flightdeck::scout_takeoff, pid, scout::FLAG_FILTER_INSTALLED);
+  } else {
+    // execve() fails! Stop tracing.
+    //
+    // This SIGTRAP was made up by the scout to notify the Command
+    // Center for only the success execve() making SIGTRAP, failed one
+    // doesn't make SIGTRAP.
+    assert(evt == 0);
   }
-
-  // Install the signal handler and establish a channel, but not
-  // install the seccomp filter.
-  _E(flightdeck::scout_takeoff, pid, scout::FLAG_FILTER_INSTALLED);
 
   _E(ptrace, PTRACE_SETOPTIONS, pid, 0, 0);
 
@@ -161,7 +166,7 @@ cmdcenter::handle_exec(pid_t pid, int sock) {
   // signals.
   sigchld_ignore = false;
 
-  r = ptrace(PTRACE_DETACH, pid, nullptr, nullptr);
+  auto r = ptrace(PTRACE_DETACH, pid, nullptr, nullptr);
   if (r < 0) {
     perror("ptrace PTRACE_DETACH");
     return false;

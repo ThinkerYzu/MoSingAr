@@ -20,7 +20,7 @@ long inject_data(pid_t, void*, void*, unsigned int);
 long read_text(pid_t, void*, void*, unsigned int);
 long ptrace_attach(pid_t);
 long ptrace_waitstop(pid_t);
-long ptrace_waittrap(pid_t);
+long ptrace_waittrap(pid_t pid);
 long ptrace_stop(pid_t);
 long ptrace_cont(pid_t);
 long ptrace_stepi(pid_t);

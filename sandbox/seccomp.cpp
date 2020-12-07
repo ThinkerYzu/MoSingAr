@@ -63,6 +63,18 @@ extern void printptr(void* p);
 }
 
 static long
+execve_handler(const char *path, char*const* argv, char*const* envp) {
+  LOGU(execve_handler);
+  auto r = SYSCALL(__NR_execve, (long)path, (long)argv, (long)envp);
+  if (r < 0) {
+    // Notify the Command Center that the call fails.
+    // execve() cause SIGTRAP only if success.
+    SYSCALL(__NR_kill, getpid(), SIGTRAP);
+  }
+  return r;
+}
+
+static long
 vfork_handler(char *rsp, char *old_rsp) {
   static char buf[256];
 
@@ -217,20 +229,19 @@ handle_syscall(siginfo_t* info, ucontext_t* context) {
       auto envp = (char *const*)SECCOMP_PARM3(ctx);
       auto r = bridge.send_execve(filename, argv, envp);
       SECCOMP_RESULT(ctx) = r;
-      // Call execve() through the syscall trampoline after leaving
-      // the handler, and return to the user space code.
+      // Call execve() at the handler after leaving the handler and
+      // returning to the user space code.
       if (r == 0) {
         static char altstack[1024];
         auto saved_rsp = SECCOMP_REG(ctx, REG_RSP);
         SECCOMP_REG(ctx, REG_RSP) = (long long unsigned int)(altstack + 1024 - sizeof(void*));
 
-        install_fakeframe(ctx, (void*)td__syscall_trampo, (void*)saved_rsp);
+        install_fakeframe(ctx, (void*)execve_handler, (void*)saved_rsp);
 
-        // set arguments for the syscall trampoline
-        SECCOMP_REG(ctx, REG_RDI) = (long long unsigned int)__NR_execve;
-        SECCOMP_REG(ctx, REG_RSI) = (long long unsigned int)filename;
-        SECCOMP_REG(ctx, REG_RDX) = (long long unsigned int)argv;
-        SECCOMP_REG(ctx, REG_RCX) = (long long unsigned int)envp;
+        // set arguments for the handler
+        SECCOMP_REG(ctx, REG_RDI) = (long long unsigned int)filename;
+        SECCOMP_REG(ctx, REG_RSI) = (long long unsigned int)argv;
+        SECCOMP_REG(ctx, REG_RDX) = (long long unsigned int)envp;
       }
     }
     break;
