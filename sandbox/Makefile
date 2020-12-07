@@ -3,7 +3,7 @@
 # see https://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html#base-personality
 CFLAGS := -Wall -Werror -fpic -fvisibility=hidden -fno-builtin -nostdlib \
 	-I./ -Ifake-inc/ -fno-builtin -I../loader -fno-exceptions -I../toolkits \
-	-fno-stack-protector -DDEBUG
+	-fno-stack-protector
 
 libtongdao_so_OBJS := bootstrap.o seccomp.o filter.o bridge.o \
 	syscall-trampo.o tinylibc.o sig-trampo.o tinymalloc.o scout.o \
