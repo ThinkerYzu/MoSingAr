@@ -27,5 +27,10 @@
     if (__errhandle_r < 0) { perror(#name); return nullptr; }   \
   } while( 0)
 
+#define ABORT(msg) do {                                             \
+    fprintf(stderr, "ABORT: %s:%d %s\n", __FILE__, __LINE__, msg);  \
+    abort();                                                        \
+  } while(0)
+
 
 #endif /* __errhandle_h_ */
