@@ -168,6 +168,8 @@ public:
   ogl_repo(const std::string &root, const std::string &repo);
   ~ogl_repo();
 
+  static bool init(const std::string &repo);
+
   bool add_file(const std::string &path);
   bool add_dir(const std::string &path);
   bool remove(const std::string &path);
