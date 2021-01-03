@@ -168,7 +168,6 @@ ogl_dir::dump() {
     case OGL_NONEXISTENT:
       {
         entobj->mode = otypes::dentry::ENT_NONEXISTENT << 12;
-        entobj->tm  = 0;
         hashcodes[ndx] = 0;
       }
       break;
@@ -184,7 +183,6 @@ ogl_dir::dump() {
         if (file->get_own_group()) {
           entobj->mode |= otypes::dentry::GROUP_MASK;
         }
-        entobj->tm = static_cast<uint32_t>(time(nullptr));
         hashcodes[ndx] = file->hashcode();
       }
       break;
@@ -200,7 +198,6 @@ ogl_dir::dump() {
         if (dir->get_own_group()) {
           entobj->mode |= otypes::dentry::GROUP_MASK;
         }
-        entobj->tm = static_cast<uint32_t>(time(nullptr));
         hashcodes[ndx] = dir->hashcode();
       }
       break;
@@ -216,7 +213,6 @@ ogl_dir::dump() {
         if (symlink->get_own_group()) {
           entobj->mode |= otypes::dentry::GROUP_MASK;
         }
-        entobj->tm = static_cast<uint32_t>(time(nullptr));
         hashcodes[ndx] = symlink->hashcode();
       }
       break;

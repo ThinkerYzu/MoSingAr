@@ -41,7 +41,6 @@ struct dentry {
   constexpr static uint16_t PLACEHOLDER_MASK = 04000;
   uint16_t mode;
   uint16_t name_offset;
-  uint32_t tm;
 
   entry_type get_entry_type() {
     return (entry_type)(mode >> 12);
