@@ -46,6 +46,14 @@ public:
   virtual ogl_type get_type() { return OGL_NONEXISTENT; }
 };
 
+
+/**
+ * The instances of ogl_file will not dump them-self to repositories.
+ * Instead, they compute hash codes of files behind it.
+ *
+ * The objects are started with an invalid hash code.  The valid hash
+ * code of an instance will be computed when commit it.
+ */
 class ogl_file : public ogl_entry {
 public:
   ogl_file(ogl_repo* repo, const std::string& fname, const std::string& dirname)
@@ -55,7 +63,7 @@ public:
     , mode(0)
     , own(false)
     , own_group(false)
-    , is_new_file(true) {
+    , valid_hash(false) {
   }
   virtual ogl_type get_type() { return OGL_FILE; }
   virtual ogl_file* to_file() { return this; }
@@ -63,12 +71,12 @@ public:
   uint64_t hashcode() { return hash; }
   void set_hashcode(uint64_t hashcode) {
     hash = hashcode;
-    is_new_file = false;
+    valid_hash = true;
   }
   uint64_t get_mode() { return mode; }
   bool get_own() { return own; }
   bool get_own_group() { return own_group; }
-  bool is_new() { return is_new_file; }
+  bool has_valid_hash() { return valid_hash; }
 
   int open();
 
@@ -81,7 +89,7 @@ private:
   uint16_t mode;
   bool own;
   bool own_group;
-  bool is_new_file;
+  bool valid_hash;
 };
 
 class ogl_dir : public ogl_entry {

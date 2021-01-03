@@ -418,7 +418,7 @@ ogl_repo::commit() {
     case ogl_entry::OGL_FILE:
       {
         auto file = ent->to_file();
-        if (file->is_new()) {
+        if (!file->has_valid_hash()) {
           auto ok = file->compute_hashcode();
           if (!ok) {
             return false;
