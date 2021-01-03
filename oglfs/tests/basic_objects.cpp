@@ -5,6 +5,7 @@
 
 #include <limits.h>
 #include <stdlib.h>
+#include <assert.h>
 
 int
 main(int argc, char * const * argv) {
@@ -24,6 +25,12 @@ main(int argc, char * const * argv) {
   std::string tests("tests");
   auto rootobj = repo.get_root();
   rootobj->add_dir(tests);
+
+  auto tests_ent = repo.find(realpath("../tests", nullptr));
+  assert(tests_ent);
+  auto tests_dir = tests_ent->to_dir();
+  assert(tests_dir);
+  tests_dir->add_file("basic_objects");
 
   repo.commit();
   return 0;

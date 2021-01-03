@@ -28,7 +28,7 @@ compute_hash_buf(void* buf, int size) {
   SHA256_Final(digest, &ctx);
   uint64_t hash = 0;
   for (int i = 0; i < 8; i++) {
-    hash |= ((uint64_t)digest[i]) << (i * 8);
+    hash = (hash << 8) | (uint64_t)digest[i];
   }
   return hash;
 }
@@ -55,24 +55,23 @@ ogl_file::compute_hashcode() {
   while ((cp = read(fd, buf, BUF_SZ)) > 0) {
     SHA256_Update(&ctx, (const uint8_t*)buf, cp);
   }
+  delete buf;
+
+  close(fd);
 
   if (cp < 0) {
-    delete buf;
-    close(fd);
     return false;
   }
 
   // Get the hash code
   uint8_t digest[SHA256_DIGEST_LENGTH];
   SHA256_Final(digest, &ctx);
-  auto hash = 0;
+  uint64_t hash = 0;
   for (int i = 0; i < 8; i++) {
-    hash |= ((uint64_t)digest[i]) << (i * 8);
+    hash = (hash << 8) | (uint64_t)digest[i];
   }
   set_hashcode(hash);
 
-  delete buf;
-  close(fd);
   return true;
 }
 
@@ -343,7 +342,7 @@ ogl_repo::~ogl_repo() {
 static bool
 write_root_ref(const std::string& repo_path, uint64_t hash) {
   char buf[24];
-  snprintf(buf, sizeof(buf), "%0lx", hash);
+  snprintf(buf, sizeof(buf), "%016lx", hash);
 
   std::string rootref = repo_path + "/root-ref";
   auto fd = open(rootref.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0744);
@@ -384,7 +383,7 @@ ogl_repo::init(const std::string& repo) {
     return false;
   }
   char buf[24];
-  snprintf(buf, sizeof(buf), "%0lx", hash);
+  snprintf(buf, sizeof(buf), "%016lx", hash);
   std::string objfilename = objs + "/" + buf;
   auto fd = open(objfilename.c_str(), O_WRONLY | O_CREAT, 0744);
   if (fd < 0) {
@@ -419,7 +418,7 @@ ogl_repo::commit() {
     case ogl_entry::OGL_FILE:
       {
         auto file = ent->to_file();
-        if (!file->is_new()) {
+        if (file->is_new()) {
           auto ok = file->compute_hashcode();
           if (!ok) {
             return false;
@@ -473,6 +472,50 @@ ogl_repo::commit() {
   return true;
 }
 
+static bool
+ancest_of_path(const std::string& ancest, const std::string& descent) {
+  if ((ancest.size() + 1) >= descent.size()) {
+    return false;
+  }
+  assert(ancest.back() != '/');
+  return descent.find(ancest) == 0 && descent[ancest.size()] == '/';
+}
+
+static const std::string
+relative_path(const std::string& ancest, const std::string& descent) {
+  assert(ancest_of_path(ancest, descent));
+  auto pos = ancest.size() + 1;
+  return descent.substr(pos);
+}
+
+ogl_entry*
+ogl_repo::find(const std::string& path) {
+  assert(ancest_of_path(root_path, path));
+  ogl_entry* ent = root_dir.get();
+  std::string rpath = relative_path(root_path, path);
+  while (ent && rpath.size()) {
+    ogl_dir* dir = ent->to_dir();
+    if (dir == nullptr) {
+      // The visiting entry is not a directory, it can be a file,
+      // a link, or not existing.
+      return nullptr;
+    }
+
+    auto pos = rpath.find('/');
+    std::string name;
+    assert(pos != 0);
+    if (pos != std::string::npos) {
+      name = rpath.substr(0, pos);
+      rpath = rpath.substr(pos + 1);
+    } else {
+      name = rpath;
+      rpath = "";
+    }
+    ent = dir->lookup(name);
+  }
+  return ent;
+}
+
 bool
 ogl_repo::update_root_ref() {
   auto ok = write_root_ref(repo_path, root_dir->hashcode());
@@ -483,7 +526,7 @@ bool
 ogl_repo::store_obj(uint64_t hash, const otypes::object* obj) {
   assert(obj->magic == otypes::object::MAGIC);
   char hashstr[24];
-  snprintf(hashstr, sizeof(hashstr), "%0lx", hash);
+  snprintf(hashstr, sizeof(hashstr), "%016lx", hash);
   std::string _path = repo_path + "/objects/" + hashstr;
   const char *path = _path.c_str();
   int fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0744);
@@ -494,7 +537,7 @@ ogl_repo::store_obj(uint64_t hash, const otypes::object* obj) {
 std::unique_ptr<otypes::object>
 ogl_repo::load_obj(uint64_t hash) {
   char hashstr[24];
-  snprintf(hashstr, sizeof(hashstr), "%0lx", hash);
+  snprintf(hashstr, sizeof(hashstr), "%016lx", hash);
   std::string _path = repo_path + "/objects/" + hashstr;
   const char* path = _path.c_str();
   int fd = open(path, O_RDONLY);
