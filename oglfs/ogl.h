@@ -54,18 +54,25 @@ public:
     , dir(dirname)
     , mode(0)
     , own(false)
-    , own_group(false) {
+    , own_group(false)
+    , is_new_file(true) {
   }
   virtual ogl_type get_type() { return OGL_FILE; }
   virtual ogl_file* to_file() { return this; }
 
   uint64_t hashcode() { return hash; }
-  void set_hashcode(uint64_t hashcode) { hash = hashcode; }
+  void set_hashcode(uint64_t hashcode) {
+    hash = hashcode;
+    is_new_file = false;
+  }
   uint64_t get_mode() { return mode; }
   bool get_own() { return own; }
   bool get_own_group() { return own_group; }
+  bool is_new() { return is_new_file; }
 
   int open();
+
+  bool compute_hashcode();
 
 private:
   uint64_t hash;
@@ -74,12 +81,17 @@ private:
   uint16_t mode;
   bool own;
   bool own_group;
+  bool is_new_file;
 };
 
 class ogl_dir : public ogl_entry {
 public:
+  using entries_t = std::map<std::string, std::unique_ptr<ogl_entry>>;
+  using iterator = entries_t::iterator;
+
   ogl_dir(ogl_repo* repo, ogl_dir* parent, const std::string& dirname)
     : ogl_entry(repo)
+    , parent(parent)
     , dirname(dirname)
     , abspath(parent ? parent->abspath + "/" + dirname : dirname)
     , mode(0)
@@ -111,15 +123,30 @@ public:
   bool get_own() { return own; }
   bool get_own_group() { return own_group; }
 
+  iterator begin() {
+    return entries.begin();
+  }
+
+  iterator end() {
+    return entries.end();
+  }
+
 private:
   bool in_memory(const std::string &name) {
     return entries.find(name) != entries.end();
   }
 
+  void mark_modified() {
+    for (auto pd = this; pd; pd = pd->parent) {
+      pd->modified = true;
+    }
+  }
+
+  ogl_dir* parent;
   uint64_t hash;
   const std::string dirname;
   const std::string abspath;
-  std::map<std::string, std::unique_ptr<ogl_entry>> entries;
+  entries_t entries;
   uint16_t mode;
   bool own;
   bool own_group;
@@ -170,6 +197,14 @@ public:
 
   static bool init(const std::string &repo);
 
+  const std::string& get_rootpath() {
+    return root_path;
+  }
+
+  ogl_dir* get_root() {
+    return root_dir.get();
+  }
+
   bool add_file(const std::string &path);
   bool add_dir(const std::string &path);
   bool remove(const std::string &path);
@@ -182,6 +217,8 @@ public:
   std::unique_ptr<otypes::object> load_obj(uint64_t hash);
 
 private:
+  bool update_root_ref();
+
   const std::string root_path;
   const std::string repo_path;
   std::unique_ptr<ogl_dir> root_dir;

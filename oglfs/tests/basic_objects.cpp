@@ -3,10 +3,16 @@
  */
 #include "ogl.h"
 
+#include <limits.h>
+#include <stdlib.h>
+
 int
 main(int argc, char * const * argv) {
-  std::string root("..");
+  char* path = realpath("..", nullptr);
+  std::string root(path);
+  free(path);
   std::string repo_path("test_repo");
+
   auto ok = ogl_repo::init(repo_path);
   if (!ok) {
     printf("FAILED!\n");
@@ -14,5 +20,11 @@ main(int argc, char * const * argv) {
   }
   ogl_repo repo(root, repo_path);
   printf("OK!\n");
+
+  std::string tests("tests");
+  auto rootobj = repo.get_root();
+  rootobj->add_dir(tests);
+
+  repo.commit();
   return 0;
 }
