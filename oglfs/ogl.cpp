@@ -500,6 +500,9 @@ ogl_repo::find(const std::string& path) {
       // a link, or not existing.
       return nullptr;
     }
+    if (!dir->has_loaded()) {
+      dir->load();
+    }
 
     auto pos = rpath.find('/');
     std::string name;

@@ -17,3 +17,4 @@ clean:
 	rm -f *.a
 
 test:
+	$(MAKE) -C tests test

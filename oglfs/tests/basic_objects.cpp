@@ -33,5 +33,17 @@ main(int argc, char * const * argv) {
   tests_dir->add_file("basic_objects");
 
   repo.commit();
+
+  // Check if the repo can be loaded correctly.
+  ogl_repo repo1(root, repo_path);
+  auto bo_ent = repo.find(realpath("../tests/basic_objects", nullptr));
+  assert(bo_ent);
+  auto bo_file = bo_ent->to_file();
+  assert(bo_file);
+  auto hash = bo_file->hashcode();
+  ok = bo_file->compute_hashcode();
+  assert(ok);
+  assert(hash == bo_file->hashcode());
+
   return 0;
 }
