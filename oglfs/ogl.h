@@ -118,7 +118,7 @@ public:
 
   bool add_file(const std::string &filename);
   bool add_dir(const std::string &dirname);
-  bool add_symlink(const std::string& target);
+  bool add_symlink(const std::string& filename);
   bool remove(const std::string &name);
   bool mark_nonexistent(const std::string &name);
 
@@ -137,6 +137,10 @@ public:
 
   iterator end() {
     return entries.end();
+  }
+
+  const std::string& get_path() {
+    return abspath;
   }
 
 private:
@@ -162,13 +166,24 @@ private:
   bool loaded;
 };
 
+/**
+ * The instances of ogl_symlink are started as modified and not loaded.
+ * One being dumped or loaded, they are loaded and not modified.
+ *
+ * When a symlink is modified, it should be dumped for commiting later.
+ */
 class ogl_symlink : public ogl_entry {
 public:
-  ogl_symlink(ogl_repo* repo)
+  constexpr static int MAX_TARGET_SIZE = 256;
+
+  ogl_symlink(ogl_repo* repo, ogl_dir* dir, const std::string& name)
     : ogl_entry(repo)
+    , dir(dir)
+    , name(name)
     , mode(0)
     , own(false)
     , own_group(false)
+    , modified(true)
     , loaded(false) {
   }
   virtual ogl_type get_type() { return OGL_SYMLINK; }
@@ -179,7 +194,10 @@ public:
   const std::string& get_target() { return target; }
 
   uint64_t hashcode() { return hash; }
-  bool set_hashcode(uint64_t hashcode) { hash = hashcode; }
+  bool set_hashcode(uint64_t hashcode) {
+    hash = hashcode;
+    modified = false;
+  }
 
   uint64_t get_mode() { return mode; }
   bool get_own() { return own; }
@@ -187,14 +205,22 @@ public:
 
   bool load();
   bool dump();
+  bool has_modified() { return modified; }
   bool has_loaded() { return loaded; }
 
+  void mark_modified() {
+    modified = true;
+  }
+
 private:
-  const std::string target;
+  ogl_dir* dir;
+  std::string name;
+  std::string target;
   uint64_t hash;
   uint16_t mode;
   bool own;
   bool own_group;
+  bool modified;
   bool loaded;
 };
 

@@ -6,6 +6,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <unistd.h>
 
 int
 main(int argc, char * const * argv) {
@@ -32,6 +33,10 @@ main(int argc, char * const * argv) {
   assert(tests_dir);
   tests_dir->add_file("basic_objects");
 
+  auto r = symlink("basic_objects", "symlink-test");
+  assert(r == 0);
+  tests_dir->add_symlink("symlink-test");
+
   repo.commit();
 
   // Check if the repo can be loaded correctly.
@@ -44,6 +49,17 @@ main(int argc, char * const * argv) {
   ok = bo_file->compute_hashcode();
   assert(ok);
   assert(hash == bo_file->hashcode());
+
+  auto sl_ent = repo.find((std::string(realpath("../tests", nullptr)) + "/symlink-test").c_str());
+  assert(sl_ent);
+  auto sl_link = sl_ent->to_symlink();
+  assert(sl_link);
+  ok = sl_link->load();
+  assert(ok);
+  hash = sl_link->hashcode();
+  assert(hash);
+  auto target = sl_link->get_target();
+  assert(target == "basic_objects");
 
   return 0;
 }

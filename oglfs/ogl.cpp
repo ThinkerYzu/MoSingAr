@@ -94,6 +94,13 @@ ogl_dir::add_dir(const std::string& dirname) {
 }
 
 bool
+ogl_dir::add_symlink(const std::string& filename) {
+  std::unique_ptr<ogl_symlink> sym = std::make_unique<ogl_symlink>(repo, this, filename);
+  entries[filename] = std::move(sym);
+  return true;
+}
+
+bool
 ogl_dir::dump() {
   assert(loaded);
 
@@ -266,7 +273,7 @@ ogl_dir::load() {
     case otypes::dentry::ENT_SYMLINK:
       {
         std::unique_ptr<ogl_symlink> symlink =
-          std::make_unique<ogl_symlink>(repo);
+          std::make_unique<ogl_symlink>(repo, this, name);
         symlink->set_hashcode(hash);
         entries[name] = std::move(symlink);
       }
@@ -311,6 +318,13 @@ ogl_repo::ogl_repo(const std::string &root, const std::string &repo)
 
 bool
 ogl_symlink::dump() {
+  char target_cstr[MAX_TARGET_SIZE];
+  auto fullpath = dir->get_path() + "/" + name;
+  auto cp = readlink(fullpath.c_str(), target_cstr, sizeof(target_cstr));
+  assert(cp > 0 && cp < MAX_TARGET_SIZE);
+  target_cstr[cp] = 0;
+  target = target_cstr;
+
   auto sz = sizeof(otypes::symlink_object) + target.size() + 1;
   auto buf = new char[sz];
   auto obj = new(buf) otypes::symlink_object;
@@ -325,11 +339,25 @@ ogl_symlink::dump() {
 
   if (ok) {
     set_hashcode(hash);
+    loaded = true;
   }
 
   delete buf;
 
   return ok;
+}
+
+bool
+ogl_symlink::load() {
+  std::unique_ptr<otypes::object> obj = repo->load_obj(hashcode());
+  if (!obj) {
+    return false;
+  }
+  assert(obj->type == otypes::object::SYMLINK);
+  auto slobj = reinterpret_cast<otypes::symlink_object*>(obj.get());
+  assert(slobj->linkto[slobj->linkto_size - 1] == 0);
+  target = slobj->linkto;
+  return true;
 }
 
 ogl_repo::~ogl_repo() {
@@ -442,7 +470,7 @@ ogl_repo::commit() {
     case ogl_entry::OGL_SYMLINK:
       {
         auto link = ent->to_symlink();
-        if (link->has_loaded()) {
+        if (link->has_modified()) {
           auto ok = link->dump();
           if (!ok) {
             return false;

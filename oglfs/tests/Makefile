@@ -6,9 +6,9 @@ CFLAGS := -I../ -g
 all: $(TESTS)
 
 test: $(TESTS)
-	rm -rf test_repo
+	rm -rf test_repo symlink-test
 	./basic_objects
-	rm -rf test_repo
+	rm -rf test_repo symlink-test
 
 basic_objects: basic_objects.cpp ../libogl.a
 	$(CXX) $(CFLAGS) -o $@ $< ../libogl.a ../../3rd-parties/libsha2.a
