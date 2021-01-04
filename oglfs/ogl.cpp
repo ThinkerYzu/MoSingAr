@@ -35,7 +35,7 @@ compute_hash_buf(void* buf, int size) {
 
 int
 ogl_file::open() {
-  auto path = dir + "/" + filename;
+  auto path = dir->get_path(filename);
   auto fd = ::open(path.c_str(), O_RDONLY);
   return fd;
 }
@@ -72,12 +72,22 @@ ogl_file::compute_hashcode() {
   }
   set_hashcode(hash);
 
+  // Collects perms, that will be read and dump by the containing dir.
+  struct stat statbuf;
+  auto ok = dir->get_stat(statbuf, filename);
+  if (!ok) {
+    return false;
+  }
+  own = getuid() == statbuf.st_uid;
+  own_group = getgid() == statbuf.st_gid;
+  mode = statbuf.st_mode & 0777;
+
   return true;
 }
 
 bool
 ogl_dir::add_file(const std::string& filename) {
-  entries[filename] = std::make_unique<ogl_file>(repo, filename, abspath);
+  entries[filename] = std::make_unique<ogl_file>(repo, this, filename);
   mark_modified();
   return true;
 }
@@ -104,6 +114,7 @@ bool
 ogl_dir::dump() {
   assert(loaded);
 
+  // Collect files in the directory, and sort them.
   std::vector<std::string> names;
   int cnt_nonexistent = 0;
   int cnt_file = 0;
@@ -139,12 +150,15 @@ ogl_dir::dump() {
       break;
     }
   }
+  std::sort(names.begin(), names.end());
+
   int objsize = sizeof(otypes::dir_object);
   objsize += sizeof(otypes::dentry) * names.size();
   int hash_offset = objsize;
   objsize += sizeof(uint64_t) * names.size();
   int str_offset = objsize;
   objsize += str_total;
+
 
   auto obj = reinterpret_cast<otypes::dir_object*>(new char[objsize]);
   bzero(obj, objsize);
@@ -159,7 +173,7 @@ ogl_dir::dump() {
                                                hash_offset);
   auto strptr = reinterpret_cast<char*>(obj) + str_offset;
 
-  std::sort(names.begin(), names.end());
+  // Fill entries of otypes::dir_object
   int ndx = 0;
   for (auto name = names.begin();
        name != names.end();
@@ -230,6 +244,16 @@ ogl_dir::dump() {
   auto ok = repo->store_obj(hash, obj);
   set_hashcode(hash);
 
+  // Collects perms, that will be read and dump by the containing dir.
+  struct stat statbuf;
+  ok = get_stat(statbuf);
+  if (!ok) {
+    return false;
+  }
+  own = getuid() == statbuf.st_uid;
+  own_group = getgid() == statbuf.st_gid;
+  mode = statbuf.st_mode & 0777;
+
   return ok;
 }
 
@@ -255,7 +279,7 @@ ogl_dir::load() {
     case otypes::dentry::ENT_FILE:
       {
         std::unique_ptr<ogl_file> file =
-          std::make_unique<ogl_file>(repo, name, abspath);
+          std::make_unique<ogl_file>(repo, this, name);
         file->set_hashcode(hash);
         entries[name] = std::move(file);
       }
@@ -296,6 +320,13 @@ ogl_dir::lookup(const std::string& name) {
     return nullptr;
   }
   return itr->second.get();
+}
+
+bool
+ogl_dir::get_stat(struct stat& buf, const std::string& name) {
+  auto path = get_path(name);
+  int r = lstat(path.c_str(), &buf);
+  return r == 0;
 }
 
 ogl_repo::ogl_repo(const std::string &root, const std::string &repo)
@@ -344,7 +375,21 @@ ogl_symlink::dump() {
 
   delete buf;
 
-  return ok;
+  if (!ok) {
+    return false;
+  }
+
+  // Collects perms, that will be read and dump by the containing dir.
+  struct stat statbuf;
+  ok = dir->get_stat(statbuf, name);
+  if (!ok) {
+    return false;
+  }
+  own = getuid() == statbuf.st_uid;
+  own_group = getgid() == statbuf.st_gid;
+  mode = statbuf.st_mode & 0777;
+
+  return true;
 }
 
 bool

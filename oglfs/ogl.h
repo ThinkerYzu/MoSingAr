@@ -9,6 +9,9 @@
 #include <memory>
 #include <string>
 
+extern "C" {
+struct stat;
+};
 
 namespace otypes {
 struct object;
@@ -56,10 +59,10 @@ public:
  */
 class ogl_file : public ogl_entry {
 public:
-  ogl_file(ogl_repo* repo, const std::string& fname, const std::string& dirname)
+  ogl_file(ogl_repo* repo, ogl_dir* dir, const std::string& fname)
     : ogl_entry(repo)
+    , dir(dir)
     , filename(fname)
-    , dir(dirname)
     , mode(0)
     , own(false)
     , own_group(false)
@@ -83,9 +86,9 @@ public:
   bool compute_hashcode();
 
 private:
+  ogl_dir* dir;
   uint64_t hash;
   const std::string filename;
-  const std::string dir;
   uint16_t mode;
   bool own;
   bool own_group;
@@ -139,9 +142,18 @@ public:
     return entries.end();
   }
 
-  const std::string& get_path() {
-    return abspath;
+  const std::string get_path(const std::string &name = "") {
+    if (name.size() == 0) {
+      return abspath;
+    }
+    return abspath + "/" + name;
   }
+
+  /**
+   * Get stat of the name in the directory from the backing file
+   * system.
+   */
+  bool get_stat( struct stat& buf, const std::string& name = "");
 
 private:
   bool in_memory(const std::string &name) {
