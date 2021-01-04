@@ -14,4 +14,4 @@ basic_objects: basic_objects.cpp ../libogl.a
 	$(CXX) $(CFLAGS) -o $@ $< ../libogl.a ../../3rd-parties/libsha2.a
 
 clean:
-	rm -f *.o *~ $(TESTS) test_repo
+	rm -rf *.o *~ $(TESTS) test_repo symlink-test

@@ -369,7 +369,7 @@ write_root_ref(const std::string& repo_path, uint64_t hash) {
   snprintf(buf, sizeof(buf), "%016lx", hash);
 
   std::string rootref = repo_path + "/root-ref";
-  auto fd = open(rootref.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0744);
+  auto fd = open(rootref.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd < 0) {
     return false;
   }
@@ -409,7 +409,7 @@ ogl_repo::init(const std::string& repo) {
   char buf[24];
   snprintf(buf, sizeof(buf), "%016lx", hash);
   std::string objfilename = objs + "/" + buf;
-  auto fd = open(objfilename.c_str(), O_WRONLY | O_CREAT, 0744);
+  auto fd = open(objfilename.c_str(), O_WRONLY | O_CREAT, 0644);
   if (fd < 0) {
     return false;
   }
@@ -556,7 +556,7 @@ ogl_repo::store_obj(uint64_t hash, const otypes::object* obj) {
   snprintf(hashstr, sizeof(hashstr), "%016lx", hash);
   std::string _path = repo_path + "/objects/" + hashstr;
   const char *path = _path.c_str();
-  int fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0744);
+  int fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
   auto cp = write(fd, obj, obj->size);
   return cp == obj->size;
 }
