@@ -50,7 +50,7 @@ main(int argc, char * const * argv) {
   assert(ok);
   assert(hash == bo_file->hashcode());
 
-  auto sl_ent = repo.find((std::string(realpath("../tests", nullptr)) + "/symlink-test").c_str());
+  auto sl_ent = repo1.find((std::string(realpath("../tests", nullptr)) + "/symlink-test").c_str());
   assert(sl_ent);
   auto sl_link = sl_ent->to_symlink();
   assert(sl_link);
@@ -61,12 +61,27 @@ main(int argc, char * const * argv) {
   auto target = sl_link->get_target();
   assert(target == "basic_objects");
 
-  tests_ent = repo.find(realpath("../tests", nullptr));
+  // Adding the same file more than once.
+  tests_ent = repo1.find(realpath("../tests", nullptr));
   assert(tests_ent);
   tests_dir = tests_ent->to_dir();
   assert(tests_dir);
   ok = tests_dir->add_file("basic_objects");
   assert(!ok);
+
+  // Remove
+  ok = tests_dir->remove("basic_objects");
+  assert(ok);
+  bo_ent = repo1.find(realpath("../tests/basic_objects", nullptr));
+  assert(bo_ent == nullptr);
+  repo1.commit();
+  bo_ent = repo1.find(realpath("../tests/basic_objects", nullptr));
+  assert(bo_ent == nullptr);
+
+  // Check if basic_objects has been removed from the repo.
+  ogl_repo repo2(root, repo_path);
+  bo_ent = repo2.find(realpath("../tests/basic_objects", nullptr));
+  assert(bo_ent == nullptr);
 
   return 0;
 }

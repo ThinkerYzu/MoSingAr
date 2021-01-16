@@ -124,6 +124,19 @@ ogl_dir::add_symlink(const std::string& filename) {
   }
   std::unique_ptr<ogl_symlink> sym = std::make_unique<ogl_symlink>(repo, this, filename);
   entries[filename] = std::move(sym);
+  mark_modified();
+  return true;
+}
+
+bool
+ogl_dir::remove(const std::string& filename) {
+  auto ent = lookup(filename);
+  if (ent == nullptr) {
+    return false;
+  }
+
+  entries.erase(filename);
+  mark_modified();
   return true;
 }
 
