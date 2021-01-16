@@ -7,6 +7,18 @@
 #include <stdint.h>
 #include <cassert>
 
+/**
+ * obj_dir::dentry -+--> info of obj_dir
+ *                  |
+ *                  +--> info of obj_file
+ *                  |
+ *                  +--> info of obj_symlink
+ *                  |
+ *                  +--> NONEXISTENT
+ *
+ * Layout of obj_dir:
+ *  struct obj_dir + n dentry entries + n hash code + n name strings
+ */
 namespace otypes {
 
 struct object {

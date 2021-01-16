@@ -61,5 +61,12 @@ main(int argc, char * const * argv) {
   auto target = sl_link->get_target();
   assert(target == "basic_objects");
 
+  tests_ent = repo.find(realpath("../tests", nullptr));
+  assert(tests_ent);
+  tests_dir = tests_ent->to_dir();
+  assert(tests_dir);
+  ok = tests_dir->add_file("basic_objects");
+  assert(!ok);
+
   return 0;
 }

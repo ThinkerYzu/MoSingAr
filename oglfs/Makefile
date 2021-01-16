@@ -16,5 +16,5 @@ clean:
 	rm -f *~ *.o
 	rm -f *.a
 
-test:
+test: all
 	$(MAKE) -C tests test

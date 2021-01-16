@@ -1,6 +1,14 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  * vim: set ts=8 sts=2 et sw=2 tw=80:
  */
+/**
+ * The directory of a repository looks like
+ * - root_path/
+ *   - root-ref
+ *     - contains the hash code of the current root directory object.
+ *   - objects/
+ *     - object files named with their 64-bits hash code.
+ */
 #include "ogl.h"
 #include "otypes.h"
 
@@ -87,6 +95,9 @@ ogl_file::compute_hashcode() {
 
 bool
 ogl_dir::add_file(const std::string& filename) {
+  if (lookup(filename) != nullptr) {
+    return false;
+  }
   entries[filename] = std::make_unique<ogl_file>(repo, this, filename);
   mark_modified();
   return true;
@@ -94,6 +105,9 @@ ogl_dir::add_file(const std::string& filename) {
 
 bool
 ogl_dir::add_dir(const std::string& dirname) {
+  if (lookup(dirname) != nullptr) {
+    return false;
+  }
   std::unique_ptr<ogl_dir> dir = std::make_unique<ogl_dir>(repo, this, dirname);
   // A new created ogl_dir should be loaded and modified, so it will
   // be dumped to commit the repo later.
@@ -105,6 +119,9 @@ ogl_dir::add_dir(const std::string& dirname) {
 
 bool
 ogl_dir::add_symlink(const std::string& filename) {
+  if (lookup(filename) != nullptr) {
+    return false;
+  }
   std::unique_ptr<ogl_symlink> sym = std::make_unique<ogl_symlink>(repo, this, filename);
   entries[filename] = std::move(sym);
   return true;
@@ -322,6 +339,9 @@ ogl_dir::lookup(const std::string& name) {
   return itr->second.get();
 }
 
+/**
+ * Return the |stat| of a file, a sub-directory, or a link in the directory.
+ */
 bool
 ogl_dir::get_stat(struct stat& buf, const std::string& name) {
   auto path = get_path(name);
@@ -559,7 +579,10 @@ relative_path(const std::string& ancest, const std::string& descent) {
 
 ogl_entry*
 ogl_repo::find(const std::string& path) {
+  // Must be one of descendants of the root path.
   assert(ancest_of_path(root_path, path));
+
+  // Lookup objects along the path from the root.
   ogl_entry* ent = root_dir.get();
   std::string rpath = relative_path(root_path, path);
   while (ent && rpath.size()) {
@@ -588,6 +611,9 @@ ogl_repo::find(const std::string& path) {
   return ent;
 }
 
+/**
+ * Update the root-ref in the repository.
+ */
 bool
 ogl_repo::update_root_ref() {
   auto ok = write_root_ref(repo_path, root_dir->hashcode());
