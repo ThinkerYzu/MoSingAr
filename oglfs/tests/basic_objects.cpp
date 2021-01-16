@@ -83,5 +83,20 @@ main(int argc, char * const * argv) {
   bo_ent = repo2.find(realpath("../tests/basic_objects", nullptr));
   assert(bo_ent == nullptr);
 
+  // Mark a file a nonexistent.
+  tests_ent = repo2.find(realpath("../tests", nullptr));
+  assert(tests_ent);
+  tests_dir = tests_ent->to_dir();
+  assert(tests_dir);
+  ok = tests_dir->mark_nonexistent("basic_objects");
+  assert(ok);
+  repo2.commit();
+
+  // Read the nonexistent object back.
+  ogl_repo repo3(root, repo_path);
+  bo_ent = repo3.find(realpath("../tests/basic_objects", nullptr));
+  assert(bo_ent != nullptr);
+  assert(bo_ent->to_nonexistent());
+
   return 0;
 }

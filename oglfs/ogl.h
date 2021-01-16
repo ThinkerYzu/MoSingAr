@@ -21,6 +21,7 @@ class ogl_file;
 class ogl_dir;
 class ogl_symlink;
 class ogl_repo;
+class ogl_nonexistent;
 
 class ogl_entry {
 public:
@@ -32,6 +33,7 @@ public:
   virtual ogl_file* to_file() { return nullptr; }
   virtual ogl_dir* to_dir() { return nullptr; }
   virtual ogl_symlink* to_symlink() { return nullptr; }
+  virtual ogl_nonexistent* to_nonexistent() { return nullptr; }
 
 protected:
   ogl_repo* repo;
@@ -47,6 +49,7 @@ class ogl_nonexistent : public ogl_entry {
 public:
   ogl_nonexistent(ogl_repo* repo) : ogl_entry(repo) {}
   virtual ogl_type get_type() { return OGL_NONEXISTENT; }
+  virtual ogl_nonexistent* to_nonexistent() { return this; }
 };
 
 
@@ -123,6 +126,8 @@ public:
   bool add_dir(const std::string &dirname);
   bool add_symlink(const std::string& filename);
   bool remove(const std::string &name);
+  // This is used to remember that a file is not existing on the file
+  // system, so we don't need to check it every time.
   bool mark_nonexistent(const std::string &name);
 
   bool has_modified() { return modified; }

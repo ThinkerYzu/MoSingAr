@@ -141,6 +141,20 @@ ogl_dir::remove(const std::string& filename) {
 }
 
 bool
+ogl_dir::mark_nonexistent(const std::string& filename) {
+  auto ent = lookup(filename);
+  if (ent != nullptr) {
+    return false;
+  }
+
+  std::unique_ptr<ogl_nonexistent> nonexistent =
+    std::make_unique<ogl_nonexistent>(repo);
+  entries[filename] = std::move(nonexistent);
+  mark_modified();
+  return true;
+}
+
+bool
 ogl_dir::dump() {
   assert(loaded);
 
