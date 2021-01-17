@@ -37,6 +37,10 @@ main(int argc, char * const * argv) {
   assert(r == 0);
   tests_dir->add_symlink("symlink-test");
 
+  // mark local
+  ok = rootobj->mark_local("at_local");
+  assert(ok);
+
   repo.commit();
 
   // Check if the repo can be loaded correctly.
@@ -60,6 +64,14 @@ main(int argc, char * const * argv) {
   assert(hash);
   auto target = sl_link->get_target();
   assert(target == "basic_objects");
+
+  // check local
+  rootobj = repo1.get_root();
+  rootobj->add_dir(tests);
+  auto lo_ent = rootobj->lookup("at_local");
+  assert(lo_ent);
+  auto local = lo_ent->to_local();
+  assert(local);
 
   // Adding the same file more than once.
   tests_ent = repo1.find(realpath("../tests", nullptr));

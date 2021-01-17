@@ -141,6 +141,20 @@ ogl_dir::remove(const std::string& filename) {
 }
 
 bool
+ogl_dir::mark_local(const std::string& filename) {
+  auto ent = lookup(filename);
+  if (ent != nullptr) {
+    return false;
+  }
+
+  std::unique_ptr<ogl_local> local =
+    std::make_unique<ogl_local>(repo);
+  entries[filename] = std::move(local);
+  mark_modified();
+  return true;
+}
+
+bool
 ogl_dir::mark_nonexistent(const std::string& filename) {
   auto ent = lookup(filename);
   if (ent != nullptr) {
@@ -164,6 +178,7 @@ ogl_dir::dump() {
   int cnt_file = 0;
   int cnt_dir = 0;
   int cnt_symlink = 0;
+  int cnt_local = 0;
   int str_total = 0;
   for (auto itr = entries.begin();
        itr != entries.end();
@@ -189,6 +204,12 @@ ogl_dir::dump() {
 
     case OGL_SYMLINK:
       cnt_symlink++;
+      str_total += itr->first.size() + 1;
+      names.push_back(itr->first);
+      break;
+
+    case OGL_LOCAL:
+      cnt_local++;
       str_total += itr->first.size() + 1;
       names.push_back(itr->first);
       break;
@@ -281,6 +302,13 @@ ogl_dir::dump() {
         hashcodes[ndx] = symlink->hashcode();
       }
       break;
+
+    case OGL_LOCAL:
+      {
+        entobj->mode = otypes::dentry::ENT_LOCAL << 12;
+        hashcodes[ndx] = 0;
+      }
+      break;
     }
   }
 
@@ -344,6 +372,14 @@ ogl_dir::load() {
           std::make_unique<ogl_symlink>(repo, this, name);
         symlink->set_hashcode(hash);
         entries[name] = std::move(symlink);
+      }
+      break;
+
+    case otypes::dentry::ENT_LOCAL:
+      {
+        std::unique_ptr<ogl_local> local =
+          std::make_unique<ogl_local>(repo);
+        entries[name] = std::move(local);
       }
       break;
 
@@ -665,6 +701,16 @@ ogl_repo::remove(const std::string &path) {
     return false;
   }
   return dir->remove(basename);
+}
+
+bool
+ogl_repo::mark_local(const std::string &path) {
+  std::string basename;
+  auto dir = get_parent_dir(path, basename);
+  if (dir == nullptr) {
+    return false;
+  }
+  return dir->mark_local(basename);
 }
 
 bool

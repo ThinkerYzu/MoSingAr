@@ -47,6 +47,7 @@ struct dentry {
     ENT_FILE,
     ENT_DIR,
     ENT_SYMLINK,
+    ENT_LOCAL,
   };
   constexpr static uint16_t USER_MASK = 01000;
   constexpr static uint16_t GROUP_MASK = 02000;
