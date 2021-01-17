@@ -98,5 +98,15 @@ main(int argc, char * const * argv) {
   assert(bo_ent != nullptr);
   assert(bo_ent->to_nonexistent());
 
+  // Test repo's operators.
+  ok = repo3.remove(realpath("../tests/basic_objects", nullptr));
+  assert(ok);
+  ok = repo3.add_file(realpath("../tests/basic_objects", nullptr));
+  assert(ok);
+  bo_ent = repo3.find(realpath("../tests/basic_objects", nullptr));
+  assert(bo_ent != nullptr);
+  bo_file = bo_ent->to_file();
+  assert(bo_file != nullptr);
+
   return 0;
 }

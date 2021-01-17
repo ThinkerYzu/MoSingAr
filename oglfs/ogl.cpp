@@ -590,6 +590,13 @@ ogl_repo::commit() {
 
 static bool
 ancest_of_path(const std::string& ancest, const std::string& descent) {
+  assert(ancest.size() > 0 && ancest.front() == '/');
+  assert(descent.size() > 0 && descent.front() == '/');
+  if (ancest == "/") {
+    return descent.size() > 1;
+  }
+  // For not root dir of the underlying file system, it the ancest
+  // should not be ended with '/'.
   if ((ancest.size() + 1) >= descent.size()) {
     return false;
   }
@@ -604,8 +611,78 @@ relative_path(const std::string& ancest, const std::string& descent) {
   return descent.substr(pos);
 }
 
+ogl_dir*
+ogl_repo::get_parent_dir(const std::string &path,
+                         std::string &basename) {
+  auto sep = path.rfind('/');
+  if (sep == std::string::npos) {
+    return nullptr;
+  }
+  auto dirname = sep == 0 ? std::string("/") : path.substr(0, sep);
+  basename = path.substr(sep + 1);
+  if (basename.size() == 0) {
+    return nullptr;
+  }
+  auto dir = find_dir(dirname);
+  return dir;
+}
+
+bool
+ogl_repo::add_file(const std::string &path) {
+  std::string basename;
+  auto dir = get_parent_dir(path, basename);
+  if (dir == nullptr) {
+    return false;
+  }
+  return dir->add_file(basename);
+}
+
+bool
+ogl_repo::add_dir(const std::string &path) {
+  std::string basename;
+  auto dir = get_parent_dir(path, basename);
+  if (dir == nullptr) {
+    return false;
+  }
+  return dir->add_dir(basename);
+}
+
+bool
+ogl_repo::add_symlink(const std::string &path) {
+  std::string basename;
+  auto dir = get_parent_dir(path, basename);
+  if (dir == nullptr) {
+    return false;
+  }
+  return dir->add_symlink(basename);
+}
+
+bool
+ogl_repo::remove(const std::string &path) {
+  std::string basename;
+  auto dir = get_parent_dir(path, basename);
+  if (dir == nullptr) {
+    return false;
+  }
+  return dir->remove(basename);
+}
+
+bool
+ogl_repo::mark_nonexistent(const std::string &path) {
+  std::string basename;
+  auto dir = get_parent_dir(path, basename);
+  if (dir == nullptr) {
+    return false;
+  }
+  return dir->mark_nonexistent(basename);
+}
+
 ogl_entry*
 ogl_repo::find(const std::string& path) {
+  if (path == root_path) {
+    return root_dir.get();
+  }
+
   // Must be one of descendants of the root path.
   assert(ancest_of_path(root_path, path));
 

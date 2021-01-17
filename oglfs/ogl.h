@@ -258,9 +258,17 @@ public:
 
   bool add_file(const std::string &path);
   bool add_dir(const std::string &path);
+  bool add_symlink(const std::string &path);
   bool remove(const std::string &path);
   bool mark_nonexistent(const std::string &path);
   ogl_entry* find(const std::string &path);
+  ogl_dir* find_dir(const std::string &path) {
+    auto ent = find(path);
+    if (ent == nullptr) {
+      return nullptr;
+    }
+    return ent->to_dir();
+  }
 
   bool commit();
 
@@ -269,6 +277,7 @@ public:
 
 private:
   bool update_root_ref();
+  ogl_dir* get_parent_dir(const std::string &path, std::string &basename);
 
   const std::string root_path;
   const std::string repo_path;
