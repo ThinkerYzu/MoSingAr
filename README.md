@@ -27,3 +27,36 @@ is the command to compile *hello.cpp* with GCC.
 This tools is still incomplete, only works with a sandbox to intercept
 some syscalls.  It is still needed to work on to implement network
 features.
+
+# Design
+
+The directory *loader/* implements the feature to load and run a
+program in a sandbox.  It comprises
+
+ - Carrier,
+ - Command Center,
+ - Flight Deck, and
+ - Scout (in *sandbox/*).
+
+
+*Carrier* creates an evenironment to run applications.  It is the main
+process to serve child processes running applications in sandboxes.
+
+*Scouts* are running in the child processes to coordinate the sandbox
+in their processes. Each of them establish a communication channel to
+the *Command Center*.  The *Scout* of a process intercepts syscalls
+and redirect I/O to the *Command Center* along with the messages going
+through the communication channel to the *Command Center*.  *Scout* is
+implemented in the *sandbox/* directory.
+
+*Command Center* is in the *Carrier*, aka the main process.  It
+handles messages from *Scouts* and serves their requests.
+
+The *Flight Deck*, which is in the *Carrier* too, takes off *Scouts*
+for processes.  Taking off a *Scout* means to start a process, if
+necessary, and initialize the process to deploy a *Scout*.
+
+## oglfs
+
+*oglfs* implements a mechanism to synchronize and distribute files
+among devices.
