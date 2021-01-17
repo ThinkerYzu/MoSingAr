@@ -26,6 +26,10 @@ class ogl_local;
 
 class ogl_entry {
 public:
+  /**
+   * OGL_LOCAL marks a file or a directory local.  It means it should
+   * be got from local the file system.
+   */
   enum ogl_type { OGL_NONE, OGL_REMOVED, OGL_NONEXISTENT, OGL_FILE, OGL_DIR, OGL_SYMLINK, OGL_LOCAL };
 
   ogl_entry(ogl_repo* repo) : repo(repo) {}
