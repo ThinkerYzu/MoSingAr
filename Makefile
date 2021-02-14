@@ -31,3 +31,4 @@ clean:
 	$(MAKE) -C loader clean
 	$(MAKE) -C sandbox clean
 	$(MAKE) -C toolkits clean
+	$(MAKE) -C playground clean

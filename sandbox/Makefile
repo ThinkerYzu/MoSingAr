@@ -53,7 +53,8 @@ test_tinymalloc: tinymalloc.cpp
 	$(CXX) -o $@ -DTEST -g tinymalloc.cpp
 
 clean::
-	rm -f *~ *.o libmosingar.so syscall-trampo.bin
+	rm -f *~ *.o libmosingar.so syscall-trampo.bin test_tinymalloc
+	$(MAKE) -C tests clean
 
 test:
 	$(MAKE) -C tests test
