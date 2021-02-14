@@ -326,6 +326,9 @@ ogl_dir::dump() {
   own_group = getgid() == statbuf.st_gid;
   mode = statbuf.st_mode & 0777;
 
+  modified = false;
+  loaded = true;
+
   return ok;
 }
 
@@ -388,13 +391,14 @@ ogl_dir::load() {
     }
   }
 
+  modified = false;
   loaded = true;
 
   return true;
 }
 
 ogl_entry*
-ogl_dir::lookup(const std::string& name) {
+ogl_dir::lookup(const std::string& name) const {
   auto itr = entries.find(name);
   if (itr == entries.end()) {
     return nullptr;
@@ -426,6 +430,15 @@ ogl_repo::ogl_repo(const std::string &root, const std::string &repo)
   uint64_t hash = std::stoul(buf, nullptr, 16);
   root_dir = std::make_unique<ogl_dir>(this, nullptr, root);
   root_dir->set_hashcode(hash);
+  bool ok = root_dir->load();
+  assert(ok);
+}
+
+ogl_repo::ogl_repo(const std::string &root, const std::string &repo, uint64_t root_hash)
+  : root_path(root)
+  , repo_path(repo) {
+  root_dir = std::make_unique<ogl_dir>(this, nullptr, root);
+  root_dir->set_hashcode(root_hash);
   bool ok = root_dir->load();
   assert(ok);
 }
@@ -777,6 +790,11 @@ ogl_repo::store_obj(uint64_t hash, const otypes::object* obj) {
   snprintf(hashstr, sizeof(hashstr), "%016lx", hash);
   std::string _path = repo_path + "/objects/" + hashstr;
   const char *path = _path.c_str();
+  struct stat statbuf;
+  if (stat(path, &statbuf) == 0) {
+    // An existing object!
+    return true;
+  }
   int fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
   auto cp = write(fd, obj, obj->size);
   return cp == obj->size;
@@ -807,4 +825,385 @@ ogl_repo::load_obj(uint64_t hash) {
   std::unique_ptr<otypes::object> robj(reinterpret_cast<otypes::object*>(buf));
 
   return robj;
+}
+
+void
+ogl_dir::diff(const ogl_dir* other, const diff_handler& handler) const {
+  std::vector<const std::string*> common;
+  // Find new names
+  for (auto v = entries.begin(); v != entries.end(); ++v) {
+    if (other->entries.find(v->first) != other->entries.end()) {
+      common.push_back(&v->first);
+    } else {
+      auto ok = handler(DIFF_ADD, this, other, v->first);
+      if (!ok) {
+        return;
+      }
+    }
+  }
+  // Find removed names
+  for (auto v = other->entries.begin(); v != other->entries.end(); ++v) {
+    if (entries.find(v->first) == entries.end()) {
+      auto ok = handler(DIFF_RM, this, other, v->first);
+      if (!ok) {
+        return;
+      }
+    }
+  }
+  // Find modified names
+  for (auto name_v = common.begin(); name_v != common.end(); ++name_v) {
+    auto ent = lookup(**name_v);
+    auto oent = other->lookup(**name_v);
+    if (ent->get_type() != oent->get_type()) {
+      auto ok = handler(DIFF_MOD, this, other, **name_v);
+      if (!ok) {
+        return;
+      }
+    } else {
+      switch (ent->get_type()) {
+      case OGL_REMOVED:
+      case OGL_NONEXISTENT:
+        break;
+
+      case OGL_FILE:
+        if (ent->to_file()->hashcode() !=
+            oent->to_file()->hashcode()) {
+          auto ok = handler(DIFF_MOD, this, other, **name_v);
+          if (!ok) {
+            return;
+          }
+        }
+        break;
+
+      case OGL_DIR:
+        if (ent->to_dir()->hashcode() !=
+            oent->to_dir()->hashcode()) {
+          auto ok = handler(DIFF_MOD, this, other, **name_v);
+          if (!ok) {
+            return;
+          }
+        }
+        break;
+
+      case OGL_SYMLINK:
+        if (ent->to_symlink()->hashcode() !=
+            oent->to_symlink()->hashcode()) {
+          auto ok = handler(DIFF_MOD, this, other, **name_v);
+          if (!ok) {
+            return;
+          }
+        }
+        break;
+
+      case OGL_LOCAL:
+        break;
+
+      default:
+        ABORT("invalid ogl_type");
+        break;
+      }
+    }
+  }
+}
+
+void
+ogl_dir::copy_to(ogl_dir* dst) const {
+  assert(get_type() == dst->get_type());
+  dst->hash = hash;
+  dst->mode = mode;
+  dst->own = own;
+  dst->own_group = own_group;
+  if (modified) {
+    for (auto ent = entries.begin();
+         ent != entries.end();
+         ++ent) {
+      dst->entries[ent->first] = ent->second->clone();
+    }
+  } // else make dst unloaded. And, |hash| should have a valid value.
+  dst->modified = modified;
+}
+
+bool
+ogl_repo::merge(ogl_repo* src, ogl_repo* dst, ogl_repo* common) {
+  auto sroot = src->get_root();
+  auto droot = dst->get_root();
+  auto croot = common->get_root();
+  std::vector<std::string> dir_queue;
+
+  bool conflict = false;
+  auto check_conflictions = [&](ogl_dir::diff_ops op,
+                                const ogl_dir* srcparent,
+                                const ogl_dir* cmmparent,
+                                const std::string& name) -> bool {
+    auto dstparent = dst->find_dir(srcparent->get_path());
+    switch (op) {
+    case ogl_dir::DIFF_ADD:
+      {
+        if (dstparent->lookup(name)) {
+          // Add a name that is already in dst.
+          conflict = true;
+          return false;
+        }
+      }
+      break;
+
+    case ogl_dir::DIFF_RM:
+      {
+        if (dstparent == nullptr) {
+          // Remove a name in a directory that is not existing in dst.
+          conflict = true;
+          return false;
+        }
+        auto dstent = dstparent->lookup(name);
+        if (dstent == nullptr) {
+          // The name is not existing in dst.
+          conflict = true;
+          return false;
+        }
+        // Check if the entry is the same in common and dst.
+        auto cmment = cmmparent->lookup(name);
+        assert(cmment);
+        if (cmment->get_type() != dstent->get_type()) {
+          // The type of the name has been modified in dst.
+          conflict = true;
+          return false;
+        }
+        switch (dstent->get_type()) {
+        case ogl_entry::OGL_NONEXISTENT:
+          break;
+
+        case ogl_entry::OGL_FILE:
+          {
+            if (dstent->to_file()->hashcode() !=
+                cmment->to_file()->hashcode()) {
+              conflict = true;
+              return false;
+            }
+          }
+          break;
+
+        case ogl_entry::OGL_DIR:
+          {
+            if (dstent->to_dir()->hashcode() !=
+                cmment->to_dir()->hashcode()) {
+              conflict = true;
+              return false;
+            }
+          }
+          break;
+
+        case ogl_entry::OGL_SYMLINK:
+          {
+            if (dstent->to_symlink()->hashcode() !=
+                cmment->to_symlink()->hashcode()) {
+              conflict = true;
+              return false;
+            }
+          }
+          break;
+
+        case ogl_entry::OGL_LOCAL:
+          break;
+
+        default:
+          ABORT("invalid ogl_type");
+        }
+      }
+      break;
+
+    case ogl_dir::DIFF_MOD:
+      {
+        if (dstparent == nullptr) {
+          // Modify a name in a directory that is not existing in dst.
+          conflict = true;
+          return false;
+        }
+        auto dstent = dstparent->lookup(name);
+        if (dstent == nullptr) {
+          // The name is not existing in dst.
+          conflict = true;
+          return false;
+        }
+
+        // Check if the entry is the same in common and dst.
+        auto cmment = cmmparent->lookup(name);
+        assert(cmment);
+        if (cmment->get_type() != dstent->get_type()) {
+          // The type of the name has been modified in dst.
+          conflict = true;
+          return false;
+        }
+        switch (dstent->get_type()) {
+        case ogl_entry::OGL_NONEXISTENT:
+          break;
+
+        case ogl_entry::OGL_FILE:
+          {
+            if (dstent->to_file()->hashcode() !=
+                cmment->to_file()->hashcode()) {
+              conflict = true;
+              return false;
+            }
+          }
+          break;
+
+        case ogl_entry::OGL_DIR:
+          {
+            // Directories are exceptions, that they can be modified
+            // in dst as long as keeping as a directory.  In this
+            // case, conflictions happen only if any of their entries
+            // have conflictions.
+            auto ent = srcparent->lookup(name);
+            if (ent->get_type() == ogl_entry::OGL_DIR) {
+              // Both entries are ogl_dir.
+              // Descend to the directory to change entries.
+              dir_queue.push_back(srcparent->get_path(name));
+            }
+          }
+          break;
+
+        case ogl_entry::OGL_SYMLINK:
+          {
+            if (dstent->to_symlink()->hashcode() !=
+                cmment->to_symlink()->hashcode()) {
+              conflict = true;
+              return false;
+            }
+          }
+          break;
+
+        case ogl_entry::OGL_LOCAL:
+          break;
+
+        default:
+          ABORT("invalid ogl_type");
+        }
+      }
+      break;
+
+    default:
+      ABORT("invalid value of diff_ops");
+    }
+
+    return true;
+  };
+  auto apply_changes = [&](ogl_dir::diff_ops op,
+                           const ogl_dir* srcparent,
+                           const ogl_dir* cmmparent,
+                           const std::string& name) -> bool {
+    auto dstparent = dst->find_dir(srcparent->get_path());
+    switch (op) {
+    case ogl_dir::DIFF_MOD:
+      {
+        if (srcparent->lookup(name)->get_type() == ogl_entry::OGL_DIR &&
+            dstparent->lookup(name)->get_type() == ogl_entry::OGL_DIR) {
+          // The entry of the name is a directory in both src and dst.
+          // Descend down the tree to modify directories.
+          dir_queue.push_back(dstparent->get_path(name));
+          break;
+        }
+        // Repalce the name with a new ogl_dir.
+        dstparent->remove(name);
+      }
+      break;
+
+    case ogl_dir::DIFF_ADD:
+      {
+        auto ent = srcparent->lookup(name);
+        assert(ent);
+        switch (ent->get_type()) {
+        case ogl_entry::OGL_NONEXISTENT:
+          {
+            auto ok = dstparent->mark_nonexistent(name);
+            assert(ok);
+          }
+          break;
+
+        case ogl_entry::OGL_FILE:
+          {
+            auto ok = dstparent->add_file(name);
+            assert(ok);
+            auto file = dstparent->lookup(name)->to_file();
+            file->set_hashcode(ent->to_file()->hashcode());
+          }
+          break;
+
+        case ogl_entry::OGL_DIR:
+          {
+            auto ok = dstparent->add_dir(name);
+            assert(ok);
+            auto dstdir = dstparent->lookup(name)->to_dir();
+            auto dir = ent->to_dir();
+            dir->copy_to(dstdir);
+          }
+          break;
+
+        case ogl_entry::OGL_SYMLINK:
+          {
+            auto ok = dstparent->add_symlink(name);
+            assert(ok);
+            auto symlink = dstparent->lookup(name)->to_symlink();
+            symlink->set_hashcode(ent->to_symlink()->hashcode());
+          }
+          break;
+
+        case ogl_entry::OGL_LOCAL:
+          {
+            auto ok = dstparent->mark_local(name);
+            assert(ok);
+          }
+          break;
+
+        default:
+          ABORT("invalid ogl_type");
+        }
+      }
+      break;
+
+    case ogl_dir::DIFF_RM:
+      {
+        dstparent->remove(name);
+      }
+      break;
+
+    default:
+      ABORT("invalid value of diff_ops");
+    }
+
+    return true;
+  };
+
+  // Make sure not any conflictions
+  dir_queue.push_back(src->get_rootpath());
+  while (dir_queue.size()) {
+    auto dirname = dir_queue.back();
+    dir_queue.pop_back();
+
+    auto ent = src->find(dirname);
+    auto dir = ent->to_dir();
+    assert(dir);
+    auto cmment = common->find(dirname);
+    auto cmmdir = cmment->to_dir();
+    assert(cmmdir);
+    dir->diff(cmmdir, check_conflictions);
+    if (conflict) {
+      return false;
+    }
+  }
+
+  // Apply changes
+  dir_queue.push_back(src->get_rootpath());
+  while (dir_queue.size()) {
+    auto dirname = dir_queue.back();
+    dir_queue.pop_back();
+
+    auto ent = src->find(dirname);
+    auto dir = ent->to_dir();
+    assert(dir);
+    auto cmment = common->find(dirname);
+    auto cmmdir = cmment->to_dir();
+    assert(cmmdir);
+    dir->diff(cmmdir, apply_changes);
+  }
+  return true;
 }

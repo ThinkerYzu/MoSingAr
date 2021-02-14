@@ -45,7 +45,7 @@ main(int argc, char * const * argv) {
 
   // Check if the repo can be loaded correctly.
   ogl_repo repo1(root, repo_path);
-  auto bo_ent = repo.find(realpath("../tests/basic_objects", nullptr));
+  auto bo_ent = repo1.find(realpath("../tests/basic_objects", nullptr));
   assert(bo_ent);
   auto bo_file = bo_ent->to_file();
   assert(bo_file);
