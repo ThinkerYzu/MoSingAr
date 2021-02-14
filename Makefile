@@ -21,8 +21,8 @@ oglfs:
 test:
 	$(MAKE) -C 3rd-parties test
 	$(MAKE) -C oglfs test
-	$(MAKE) -C loader test
 	$(MAKE) -C sandbox test
+	$(MAKE) -C loader test
 	$(MAKE) -C toolkits test
 
 clean:
