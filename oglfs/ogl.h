@@ -272,7 +272,7 @@ public:
   const std::string& get_target() { return target; }
 
   uint64_t hashcode() { return hash; }
-  bool set_hashcode(uint64_t hashcode) {
+  void set_hashcode(uint64_t hashcode) {
     hash = hashcode;
     modified = false;
   }
