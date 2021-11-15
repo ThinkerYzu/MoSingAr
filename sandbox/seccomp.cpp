@@ -40,6 +40,7 @@ extern int seccomp(unsigned int, unsigned int, void *);
 extern long (*td__syscall_trampo)(long, ...);
 extern long (*td__vfork_trampo)();
 extern int fakeframe_trampoline();
+extern void printptr(void* p);
 }
 
 #define SYSCALL td__syscall_trampo
@@ -49,7 +50,10 @@ static int
 install_filter() {
   extern struct sock_fprog sandbox_filter_prog;
 
-  prctl(PR_SET_NO_NEW_PRIVS, 1);
+  if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0) {
+    perror("prctl");
+    abort();
+  }
   if (seccomp(SECCOMP_SET_MODE_FILTER, 0, &sandbox_filter_prog)) {
     perror("seccomp");
     abort();
@@ -58,9 +62,6 @@ install_filter() {
 }
 
 static sandbox_bridge bridge;
-extern "C" {
-extern void printptr(void* p);
-}
 
 static long
 execve_handler(const char *path, char*const* argv, char*const* envp) {

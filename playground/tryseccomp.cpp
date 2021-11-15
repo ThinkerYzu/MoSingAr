@@ -65,7 +65,7 @@ install_filter() {
     .filter = filter,
   };
 
-  prctl(PR_SET_NO_NEW_PRIVS, 1);
+  prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
   if (seccomp(SECCOMP_SET_MODE_FILTER, 0, &prog)) {
     perror("seccomp");
     return 1;

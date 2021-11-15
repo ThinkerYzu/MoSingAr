@@ -84,39 +84,42 @@ load_shared_object(const char* path, prog_header* headers, int header_num,
   }
   long r = 0;
 
+  if (headers[0].offset != 0 || headers[0].addr != 0) {
+    // Assume the first segment always starts from the begin of
+    // the file and positioned at the address of 0.
+    _syscall(__NR_exit, 255);
+  }
+
   // Map memory and load content from the SO.
-  void *first_map = nullptr;
+  long msz = 0;
   int i;
   for (i = 0; i < header_num; i++) {
     auto header = headers + i;
 
-    auto map_start = ((unsigned long)first_map + header->addr) & ~(PG_SZ - 1);
-    auto map_stop = ((unsigned long)first_map + header->addr +
-                     header->mem_size + PG_SZ - 1) & ~(PG_SZ - 1);
-    auto msz = map_stop - map_start;
-    auto ptr = _syscall(__NR_mmap,
-                        map_start, msz,
-                        PROT_EXEC | PROT_READ | PROT_WRITE,
-                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if ((long)ptr < 0) {
-      return (long)ptr;
+    auto map_stop = (header->addr + header->mem_size + PG_SZ - 1) & ~(PG_SZ - 1);
+    if (map_stop > msz) {
+      msz = map_stop;
     }
-    if (first_map == nullptr) {
-      first_map = (void*)ptr;
-      if (header->offset != 0 || header->addr != 0) {
-        // Assume the first segment always starts from the begin of
-        // the file and positioned at the address of 0.
-        _syscall(__NR_exit, 255);
-      }
-    } else {
-      ptr = (long)first_map + header->addr;
-    }
+  }
+
+  auto map = _syscall(__NR_mmap,
+                      0, msz,
+                      PROT_EXEC | PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if ((long)map < 0) {
+    return (long)map;
+  }
+
+  for (i = 0; i < header_num; i++) {
+    auto header = headers + i;
+
+    auto seg_start = (unsigned long)map + header->addr;
 
     r = _syscall(__NR_lseek, fd, header->offset, SEEK_SET);
     if (r < 0) {
       return r;
     }
-    r = _syscall(__NR_read, fd, ptr, header->file_size);
+    r = _syscall(__NR_read, fd, seg_start, header->file_size);
     if (r < 0) {
       return r;
     }
@@ -126,8 +129,8 @@ load_shared_object(const char* path, prog_header* headers, int header_num,
   while (*rela_p) {
     auto offset = (long)rela_p[0];
     auto addend = (long)rela_p[1];
-    auto pptr = (void**)((char*)first_map + offset);
-    *pptr = (void*)((char*)first_map + addend);
+    auto pptr = (void**)((char*)map + offset);
+    *pptr = (void*)((char*)map + addend);
     rela_p += 2;
   }
 
@@ -139,7 +142,7 @@ load_shared_object(const char* path, prog_header* headers, int header_num,
   // Call init functions
   auto init_p = init_array;
   while (*init_p) {
-    auto init_func = (void(*)())((char*)first_map + (long)*init_p);
+    auto init_func = (void(*)())((char*)map + (long)*init_p);
     init_func();
     init_p++;
   }
