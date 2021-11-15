@@ -349,7 +349,8 @@ namespace {
  *  - a list of prog_header; that describe how to load code and
  *    data of the shared object to memory,
  *  - a list of offsets of init functions to initialize the shared
- *    object, and
+ *    object,
+ *  - a list of relocation records, and
  *  - the code of the loader which load the shared object to memory.
  *
  * The shellcode_funcall_trap is at the begining of the whole code.
