@@ -115,6 +115,8 @@ public:
 
   bool compute_hashcode();
 
+  void mark_modified();
+
 private:
   ogl_dir* dir;
   uint64_t hash;
@@ -213,15 +215,15 @@ public:
 
   void copy_to(ogl_dir* dst) const;
 
-private:
-  bool in_memory(const std::string &name) {
-    return entries.find(name) != entries.end();
-  }
-
   void mark_modified() {
     for (auto pd = this; pd; pd = pd->parent) {
       pd->modified = true;
     }
+  }
+
+private:
+  bool in_memory(const std::string &name) {
+    return entries.find(name) != entries.end();
   }
 
   ogl_dir* parent;
@@ -288,6 +290,7 @@ public:
 
   void mark_modified() {
     modified = true;
+    dir->mark_modified();
   }
 
 private:

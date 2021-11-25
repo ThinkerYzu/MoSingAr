@@ -93,6 +93,12 @@ ogl_file::compute_hashcode() {
   return true;
 }
 
+void
+ogl_file::mark_modified() {
+  valid_hash = false;
+  dir->mark_modified();
+}
+
 bool
 ogl_dir::add_file(const std::string& filename) {
   if (lookup(filename) != nullptr) {
