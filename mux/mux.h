@@ -280,6 +280,16 @@ public:
     mTransport = aTransport;
   }
 
+  /**
+   * Open a channel.
+   *
+   * A new channel will be created at the peer, and the
+   * ChannelListener of this instance will receive the ID of the new
+   * channel.
+   *
+   * \return a seq number that will be used by channel listeners to
+   *         identify wha request a received channel ID belong to.
+   */
   unsigned int Open(const char* aPath);
 
   // Send packets for the instances of Channel.
