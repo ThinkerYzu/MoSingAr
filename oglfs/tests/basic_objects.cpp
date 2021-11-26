@@ -120,5 +120,16 @@ main(int argc, char * const * argv) {
   bo_file = bo_ent->to_file();
   assert(bo_file != nullptr);
 
+  // Mark removed entries.
+  tests_dir = repo3.find(realpath("../tests", nullptr))->to_dir();
+  auto old_hash = tests_dir->hashcode();
+  char buf[256];
+  sprintf(buf, "%s/file_removed", realpath("../tests", nullptr));
+  ok = repo3.mark_removed(buf);
+  assert(ok);
+  repo3.commit();
+  auto new_hash = tests_dir->hashcode();
+  assert(old_hash != new_hash);
+
   return 0;
 }

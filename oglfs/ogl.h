@@ -18,6 +18,7 @@ namespace otypes {
 struct object;
 }
 
+class ogl_removed;
 class ogl_file;
 class ogl_dir;
 class ogl_symlink;
@@ -36,6 +37,7 @@ public:
   ogl_entry(ogl_repo* repo) : repo(repo) {}
 
   virtual ogl_type get_type() const { return OGL_NONE; }
+  virtual ogl_removed* to_removed() { return nullptr; }
   virtual ogl_file* to_file() { return nullptr; }
   virtual ogl_dir* to_dir() { return nullptr; }
   virtual ogl_symlink* to_symlink() { return nullptr; }
@@ -51,6 +53,7 @@ class ogl_removed : public ogl_entry {
 public:
   ogl_removed(ogl_repo* repo) : ogl_entry(repo) {}
   virtual ogl_type get_type() const { return OGL_REMOVED; }
+  virtual ogl_removed* to_removed() { return this; }
   virtual std::unique_ptr<ogl_entry> clone() { return std::make_unique<ogl_removed>(repo); }
 };
 
@@ -176,6 +179,10 @@ public:
   // This is used to remember that a file is not existing on the file
   // system, so we don't need to check it every time.
   bool mark_nonexistent(const std::string &name);
+  // Mark a file as removed.  It doesn't effect the content of
+  // persistent objects, just stands a placeholder to mark it being
+  // removed.
+  bool mark_removed(const std::string& filename);
 
   bool has_modified() { return modified; }
   bool has_loaded() { return loaded; }
@@ -327,6 +334,7 @@ public:
   bool mark_local(const std::string& filename);
   bool remove(const std::string &path);
   bool mark_nonexistent(const std::string &path);
+  bool mark_removed(const std::string &path);
   ogl_entry* find(const std::string &path);
   ogl_dir* find_dir(const std::string &path) {
     auto ent = find(path);

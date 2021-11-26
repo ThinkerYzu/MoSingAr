@@ -175,6 +175,15 @@ ogl_dir::mark_nonexistent(const std::string& filename) {
 }
 
 bool
+ogl_dir::mark_removed(const std::string& filename) {
+  std::unique_ptr<ogl_removed> removed =
+    std::make_unique<ogl_removed>(repo);
+  entries[filename] = std::move(removed);
+  mark_modified();
+  return true;
+}
+
+bool
 ogl_dir::dump() {
   assert(loaded);
 
@@ -740,6 +749,16 @@ ogl_repo::mark_nonexistent(const std::string &path) {
     return false;
   }
   return dir->mark_nonexistent(basename);
+}
+
+bool
+ogl_repo::mark_removed(const std::string &path) {
+  std::string basename;
+  auto dir = get_parent_dir(path, basename);
+  if (dir == nullptr) {
+    return false;
+  }
+  return dir->mark_removed(basename);
 }
 
 ogl_entry*
