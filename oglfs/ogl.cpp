@@ -41,6 +41,17 @@ compute_hash_buf(void* buf, int size) {
   return hash;
 }
 
+std::unique_ptr<ogl_entry>
+ogl_file::clone(ogl_dir* dir) {
+  auto file = std::make_unique<ogl_file>(dir->get_repo(), dir, filename);
+  file->hash  = hash;
+  file->mode = mode;
+  file->own = own;
+    file->own_group = own_group;
+    file->valid_hash = valid_hash;
+    return file;
+}
+
 int
 ogl_file::open() {
   auto path = dir->get_path(filename);
@@ -942,7 +953,7 @@ ogl_dir::copy_to(ogl_dir* dst) const {
     for (auto ent = entries.begin();
          ent != entries.end();
          ++ent) {
-      dst->entries[ent->first] = ent->second->clone();
+      dst->entries[ent->first] = ent->second->clone(dst);
     }
   } // else make dst unloaded. And, |hash| should have a valid value.
   dst->modified = modified;
@@ -1129,6 +1140,8 @@ ogl_repo::merge(ogl_repo* src, ogl_repo* dst, ogl_repo* common) {
         }
         // Repalce the name with a new ogl_dir.
         dstparent->remove(name);
+        auto ent = srcparent->lookup(name)->clone(dstparent);
+        dstparent->add_entry(name, std::move(ent));
       }
       break;
 

@@ -32,7 +32,10 @@ public:
    * OGL_LOCAL marks a file or a directory local.  It means it should
    * be got from local the file system.
    */
-  enum ogl_type { OGL_NONE, OGL_REMOVED, OGL_NONEXISTENT, OGL_FILE, OGL_DIR, OGL_SYMLINK, OGL_LOCAL };
+  enum ogl_type {
+    OGL_NONE, OGL_REMOVED, OGL_NONEXISTENT,
+    OGL_FILE, OGL_DIR, OGL_SYMLINK, OGL_LOCAL
+  };
 
   ogl_entry(ogl_repo* repo) : repo(repo) {}
 
@@ -43,7 +46,11 @@ public:
   virtual ogl_symlink* to_symlink() { return nullptr; }
   virtual ogl_nonexistent* to_nonexistent() { return nullptr; }
   virtual ogl_local* to_local() { return nullptr; }
-  virtual std::unique_ptr<ogl_entry> clone() { return nullptr; }
+  virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) { return nullptr; }
+
+  ogl_repo* get_repo() const {
+    return repo;
+  }
 
 protected:
   ogl_repo* repo;
@@ -54,7 +61,9 @@ public:
   ogl_removed(ogl_repo* repo) : ogl_entry(repo) {}
   virtual ogl_type get_type() const { return OGL_REMOVED; }
   virtual ogl_removed* to_removed() { return this; }
-  virtual std::unique_ptr<ogl_entry> clone() { return std::make_unique<ogl_removed>(repo); }
+  virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) {
+    return std::make_unique<ogl_removed>(repo);
+  }
 };
 
 class ogl_nonexistent : public ogl_entry {
@@ -62,7 +71,9 @@ public:
   ogl_nonexistent(ogl_repo* repo) : ogl_entry(repo) {}
   virtual ogl_type get_type() const { return OGL_NONEXISTENT; }
   virtual ogl_nonexistent* to_nonexistent() { return this; }
-  virtual std::unique_ptr<ogl_entry> clone() { return std::make_unique<ogl_nonexistent>(repo); }
+  virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) {
+    return std::make_unique<ogl_nonexistent>(repo);
+  }
 };
 
 class ogl_local : public ogl_entry {
@@ -70,7 +81,9 @@ public:
   ogl_local(ogl_repo* repo) : ogl_entry(repo) {}
   virtual ogl_type get_type() const { return OGL_LOCAL; }
   virtual ogl_local* to_local() { return this; }
-  virtual std::unique_ptr<ogl_entry> clone() { return std::make_unique<ogl_local>(repo); }
+  virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) {
+    return std::make_unique<ogl_local>(repo);
+  }
 };
 
 
@@ -94,15 +107,7 @@ public:
   }
   virtual ogl_type get_type() const { return OGL_FILE; }
   virtual ogl_file* to_file() { return this; }
-  virtual std::unique_ptr<ogl_entry> clone() {
-    auto file = std::make_unique<ogl_file>(repo, dir, filename);
-    file->hash  = hash;
-    file->mode = mode;
-    file->own = own;
-    file->own_group = own_group;
-    file->valid_hash = valid_hash;
-    return file;
-  }
+  virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir);
 
   uint64_t hashcode() { return hash; }
   void set_hashcode(uint64_t hashcode) {
@@ -160,17 +165,23 @@ public:
   }
   virtual ogl_type get_type() const { return OGL_DIR; }
   virtual ogl_dir* to_dir() { return this; }
-  virtual std::unique_ptr<ogl_entry> clone() {
-    auto dir = std::make_unique<ogl_dir>(repo, parent, dirname);
+  virtual std::unique_ptr<ogl_entry> clone(ogl_dir* parent) {
+    auto dir = std::make_unique<ogl_dir>(parent->repo, parent, dirname);
     copy_to(dir.get());
     return dir;
   }
+
 
   uint64_t hashcode() { return hash; }
   void set_hashcode(uint64_t hashcode) { hash = hashcode; }
   bool dump();
   bool load();
 
+  bool add_entry(const std::string &filename,
+                 std::unique_ptr<ogl_entry>&& entry) {
+    entries[filename] = std::move(entry);
+    return true;
+  }
   bool add_file(const std::string &filename);
   bool add_dir(const std::string &dirname);
   bool add_symlink(const std::string& filename);
@@ -269,8 +280,8 @@ public:
   virtual ogl_symlink* to_symlink() {
     return this;
   }
-  virtual std::unique_ptr<ogl_entry> clone() {
-    auto link = std::make_unique<ogl_symlink>(repo, dir, name);
+  virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) {
+    auto link = std::make_unique<ogl_symlink>(dir->get_repo(), dir, name);
     link->hash = hash;
     link->mode = mode;
     link->own = own;
