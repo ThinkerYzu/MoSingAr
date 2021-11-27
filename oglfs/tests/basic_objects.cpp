@@ -120,7 +120,7 @@ main(int argc, char * const * argv) {
   bo_file = bo_ent->to_file();
   assert(bo_file != nullptr);
 
-  // Mark removed entries.
+  // Test marking removed entries.
   tests_dir = repo3.find(realpath("../tests", nullptr))->to_dir();
   auto old_hash = tests_dir->hashcode();
   char buf[256];
@@ -130,6 +130,31 @@ main(int argc, char * const * argv) {
   repo3.commit();
   auto new_hash = tests_dir->hashcode();
   assert(old_hash != new_hash);
+
+  // Test clone().
+  ogl_repo repo4("/tests", repo_path);
+  repo4.add_dir("/tests/dir1");
+  repo4.add_dir("/tests/dir1/dir1-1");
+  repo4.add_dir("/tests/dir1/dir1-2");
+  repo4.add_dir("/tests/dir1/dir1-2/dir1-2-1");
+  repo4.add_dir("/tests/dir2");
+  auto dir1 = repo4.find("/tests/dir1")->to_dir();
+  auto dir2 = repo4.find("/tests/dir2")->to_dir();
+  dir1->copy_to(dir2);
+  auto dir1_1 = repo4.find("/tests/dir1/dir1-1")->to_dir();
+  auto dir1_2 = repo4.find("/tests/dir1/dir1-2")->to_dir();
+  auto dir1_2_1 = repo4.find("/tests/dir1/dir1-2/dir1-2-1")->to_dir();
+  assert(dir1_1->get_parent() == dir1);
+  assert(dir1_2->get_parent() == dir1);
+  assert(dir1_2_1->get_parent() == dir1_2);
+  auto dir2_1 = repo4.find("/tests/dir2/dir1-1")
+    ->to_dir();
+  auto dir2_2 = repo4.find("/tests/dir2/dir1-2")
+    ->to_dir();
+  auto dir2_2_1 = repo4.find("/tests/dir2/dir1-2/dir1-2-1")->to_dir();
+  assert(dir2_1->get_parent() == dir2);
+  assert(dir2_2->get_parent() == dir2);
+  assert(dir2_2_1->get_parent() == dir2_2);
 
   return 0;
 }

@@ -167,8 +167,17 @@ public:
   virtual ogl_dir* to_dir() { return this; }
   virtual std::unique_ptr<ogl_entry> clone(ogl_dir* parent) {
     auto dir = std::make_unique<ogl_dir>(parent->repo, parent, dirname);
+    dir->mode = mode;
+    dir->own = own;
+    dir->own_group = own_group;
+    dir->modified = modified;
+    dir->loaded = loaded;
     copy_to(dir.get());
     return dir;
+  }
+
+  ogl_dir* get_parent() const {
+    return parent;
   }
 
 
