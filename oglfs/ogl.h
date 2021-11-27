@@ -189,6 +189,7 @@ public:
   bool add_entry(const std::string &filename,
                  std::unique_ptr<ogl_entry>&& entry) {
     entries[filename] = std::move(entry);
+    mark_modified();
     return true;
   }
   bool add_file(const std::string &filename);
