@@ -1159,51 +1159,9 @@ ogl_repo::merge(ogl_repo* src, ogl_repo* dst, ogl_repo* common) {
       {
         auto ent = srcparent->lookup(name);
         assert(ent);
-        switch (ent->get_type()) {
-        case ogl_entry::OGL_NONEXISTENT:
-          {
-            auto ok = dstparent->mark_nonexistent(name);
-            assert(ok);
-          }
-          break;
-
-        case ogl_entry::OGL_FILE:
-          {
-            auto ok = dstparent->add_file(name);
-            assert(ok);
-            auto file = dstparent->lookup(name)->to_file();
-            file->set_hashcode(ent->to_file()->hashcode());
-          }
-          break;
-
-        case ogl_entry::OGL_DIR:
-          {
-            auto newent = ent->clone(dstparent);
-            assert(newent != nullptr);
-            auto ok = dstparent->add_entry(name, std::move(newent));
-            assert(ok);
-          }
-          break;
-
-        case ogl_entry::OGL_SYMLINK:
-          {
-            auto ok = dstparent->add_symlink(name);
-            assert(ok);
-            auto symlink = dstparent->lookup(name)->to_symlink();
-            symlink->set_hashcode(ent->to_symlink()->hashcode());
-          }
-          break;
-
-        case ogl_entry::OGL_LOCAL:
-          {
-            auto ok = dstparent->mark_local(name);
-            assert(ok);
-          }
-          break;
-
-        default:
-          ABORT("invalid ogl_type");
-        }
+        auto newent = ent->clone(dstparent);
+        assert(newent);
+        dstparent->add_entry(name, std::move(newent));
       }
       break;
 
