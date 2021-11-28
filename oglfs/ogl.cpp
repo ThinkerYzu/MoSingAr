@@ -945,18 +945,28 @@ ogl_dir::diff(const ogl_dir* other, const diff_handler& handler) const {
 void
 ogl_dir::copy_to(ogl_dir* dst) const {
   assert(get_type() == dst->get_type());
-  dst->hash = hash;
-  dst->mode = mode;
-  dst->own = own;
-  dst->own_group = own_group;
-  if (modified) {
-    for (auto ent = entries.begin();
-         ent != entries.end();
+  assert(dst->entries.size() == 0);
+  std::vector<std::pair<const ogl_dir*, ogl_dir*>> to_copies;
+  to_copies.emplace_back(this, dst);
+
+  while (to_copies.size() > 0) {
+    auto src_dst = to_copies.back();
+    to_copies.pop_back();
+    auto src = src_dst.first;
+    auto dst = src_dst.second;
+
+    for (auto ent = src->entries.begin();
+         ent != src->entries.end();
          ++ent) {
-      dst->entries[ent->first] = ent->second->clone(dst);
+      if (ent->second->get_type() == OGL_DIR) {
+        auto dir_ent = std::move(ent->second->to_dir()->clone_nocopy(dst));
+        to_copies.emplace_back(ent->second->to_dir(), dir_ent.get());
+        dst->entries[ent->first] = std::move(dir_ent);
+      } else {
+        dst->entries[ent->first] = ent->second->clone(dst);
+      }
     }
   } // else make dst unloaded. And, |hash| should have a valid value.
-  dst->modified = modified;
 }
 
 bool
@@ -1168,11 +1178,10 @@ ogl_repo::merge(ogl_repo* src, ogl_repo* dst, ogl_repo* common) {
 
         case ogl_entry::OGL_DIR:
           {
-            auto ok = dstparent->add_dir(name);
+            auto newent = ent->clone(dstparent);
+            assert(newent != nullptr);
+            auto ok = dstparent->add_entry(name, std::move(newent));
             assert(ok);
-            auto dstdir = dstparent->lookup(name)->to_dir();
-            auto dir = ent->to_dir();
-            dir->copy_to(dstdir);
           }
           break;
 

@@ -166,13 +166,17 @@ public:
   virtual ogl_type get_type() const { return OGL_DIR; }
   virtual ogl_dir* to_dir() { return this; }
   virtual std::unique_ptr<ogl_entry> clone(ogl_dir* parent) {
+    auto dir = clone_nocopy(parent);
+    copy_to(dir.get());
+    return dir;
+  }
+  std::unique_ptr<ogl_dir> clone_nocopy(ogl_dir* parent) {
     auto dir = std::make_unique<ogl_dir>(parent->repo, parent, dirname);
     dir->mode = mode;
     dir->own = own;
     dir->own_group = own_group;
     dir->modified = modified;
     dir->loaded = loaded;
-    copy_to(dir.get());
     return dir;
   }
 
@@ -241,6 +245,9 @@ public:
    */
   void diff(const ogl_dir* other, const diff_handler& handler) const;
 
+  /**
+   * \param dst should be empty.
+   */
   void copy_to(ogl_dir* dst) const;
 
   void mark_modified() {
