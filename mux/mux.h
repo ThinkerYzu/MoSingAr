@@ -296,7 +296,7 @@ public:
   bool DoSend(MuxPacket* aPacket);
 
   // Receive raw bytes from the Transport.
-  bool ReceiveRaw(char *aData, int aSize);
+  bool ReceiveRaw(char *aData, unsigned int aSize);
 
   // Channel ask Mux to close itself.
   void ChannelAskClose(unsigned int aChanId);

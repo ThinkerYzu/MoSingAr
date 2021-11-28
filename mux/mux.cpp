@@ -6,9 +6,6 @@
 #include <memory>
 #include <string.h>
 
-#define min(x, y) ((x) <= (y) ? (x) : (y))
-#define max(x, y) ((x) >= (y) ? (x) : (y))
-
 void
 Channel::Close() {
   mMux->ChannelAskClose(mChanId);
@@ -42,7 +39,7 @@ Channel::HandleIncomingPacket(const MuxPacket* aPacket) {
           == aPacket->mSize));
 
   mSeqPeer++;
-  mSeqPeer = max(mSeqPeer, first_seq);
+  mSeqPeer = std::max(mSeqPeer, first_seq);
   if (mListener) {
     mListener->OnReceive(this, aPacket);
   }
@@ -53,7 +50,7 @@ StreamChannel::Write(unsigned int aSize, const char *aData) {
   auto remain = aSize;
   auto ptr = aData;
   while (remain > 0) {
-    auto tocopy = min(remain, DataPacket::MaxPayloadSize);
+    auto tocopy = std::min(remain, DataPacket::MaxPayloadSize);
     std::unique_ptr<DataPacket> pkt(DataPacket::Create(tocopy, GetChannelId()));
     memcpy(pkt->mPayload, ptr, tocopy);
     auto ok = Send(pkt.get());
@@ -291,20 +288,20 @@ Mux::DoSend(MuxPacket* aPacket) {
 }
 
 bool
-Mux::ReceiveRaw(char* aData, int aSize) {
+Mux::ReceiveRaw(char* aData, unsigned int aSize) {
   auto src = aData;
   auto remain = aSize;
   while (remain) {
     // Full the input buffer.
-    auto copy = min(remain, MuxPacket::MaxPacketSize - mInputBufSize);
+    auto copy = std::min(remain, MuxPacket::MaxPacketSize - mInputBufSize);
     if (mInputBufSize == 0 && remain >= sizeof(MuxPacket)) {
       // The whole packet header is in |aData|.
       auto packet = reinterpret_cast<MuxPacket*>(src);
-      copy = min(copy, packet->mSize);
+      copy = std::min(copy, packet->mSize);
     } else if (mInputBufSize >= sizeof(MuxPacket)) {
       // The whole packet header is in |mInputBuf|.
       auto packet = reinterpret_cast<MuxPacket*>(mInputBuf);
-      copy = min((int)copy, max(0, (int)packet->mSize - (int)mInputBufSize));
+      copy = std::min((int)copy, std::max(0, (int)packet->mSize - (int)mInputBufSize));
     }
 
     if (copy > 0) {
@@ -349,6 +346,7 @@ Mux::ReceiveRaw(char* aData, int aSize) {
 
 #include <list>
 #include <functional>
+#include <cstdio>
 
 class Mock : public ChannelListener, public Transport {
 public:
