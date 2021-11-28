@@ -87,7 +87,8 @@ StreamChannel::OnError(Channel* aChannel, Channel::Error aErr) {
 Mux::Mux(MuxSide aSide)
   : mSide(aSide)
   , mControlChan(0, 0, this)
-  , mNextChanId(4 + (0x1 & (int)aSide)) {
+  , mNextChanId(4 + (0x1 & (int)aSide))
+  , mInputBufSize(0) {
   mControlChan.SetListener(this);
 }
 
