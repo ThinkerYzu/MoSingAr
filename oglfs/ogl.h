@@ -48,6 +48,10 @@ public:
   virtual ogl_local* to_local() { return nullptr; }
   virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) { return nullptr; }
 
+  virtual uint64_t get_mode() = 0;
+  virtual bool get_own() = 0;
+  virtual bool get_own_group() = 0;
+
   ogl_repo* get_repo() const {
     return repo;
   }
@@ -64,6 +68,10 @@ public:
   virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) {
     return std::make_unique<ogl_removed>(repo);
   }
+
+  virtual uint64_t get_mode() { return 0; }
+  virtual bool get_own() { return true; }
+  virtual bool get_own_group() { return true; }
 };
 
 class ogl_nonexistent : public ogl_entry {
@@ -74,6 +82,10 @@ public:
   virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) {
     return std::make_unique<ogl_nonexistent>(repo);
   }
+
+  virtual uint64_t get_mode() { return 0; }
+  virtual bool get_own() { return true; }
+  virtual bool get_own_group() { return true; }
 };
 
 class ogl_local : public ogl_entry {
@@ -84,6 +96,10 @@ public:
   virtual std::unique_ptr<ogl_entry> clone(ogl_dir* dir) {
     return std::make_unique<ogl_local>(repo);
   }
+
+  virtual uint64_t get_mode() { return 0; }
+  virtual bool get_own() { return true; }
+  virtual bool get_own_group() { return true; }
 };
 
 
@@ -172,6 +188,15 @@ public:
   }
   std::unique_ptr<ogl_dir> clone_nocopy(ogl_dir* parent) {
     auto dir = std::make_unique<ogl_dir>(parent->repo, parent, dirname);
+    dir->mode = mode;
+    dir->own = own;
+    dir->own_group = own_group;
+    dir->modified = modified;
+    dir->loaded = loaded;
+    return dir;
+  }
+  std::unique_ptr<ogl_dir> clone_nocopy() {
+    auto dir = std::make_unique<ogl_dir>(repo, parent, dirname);
     dir->mode = mode;
     dir->own = own;
     dir->own_group = own_group;
@@ -374,6 +399,7 @@ public:
 
   bool commit();
 
+  std::string get_obj_path(uint64_t hash);
   bool store_obj(uint64_t hash, const otypes::object* obj);
   std::unique_ptr<otypes::object> load_obj(uint64_t hash);
 
@@ -384,6 +410,8 @@ public:
    */
   static
   bool merge(ogl_repo* src, ogl_repo* dst, ogl_repo* common);
+
+  int make_temp(std::string& tempath);
 
 private:
   bool update_root_ref();

@@ -568,6 +568,11 @@ ogl_repo::init(const std::string& repo) {
   if (r < 0) {
     return false;
   }
+  std::string tmp = repo + "/tmp";
+  r = mkdir(tmp.c_str(), 0755);
+  if (r < 0) {
+    return false;
+  }
   std::string objs = repo + "/objects";
   r = mkdir(objs.c_str(), 0755);
   if (r < 0) {
@@ -819,13 +824,18 @@ ogl_repo::update_root_ref() {
   return ok;
 }
 
+std::string
+ogl_repo::get_obj_path(uint64_t hash) {
+  char hashstr[24];
+  snprintf(hashstr, sizeof(hashstr), "%016lx", hash);
+  std::string path = repo_path + "/objects/" + hashstr;
+  return path;
+}
+
 bool
 ogl_repo::store_obj(uint64_t hash, const otypes::object* obj) {
   assert(obj->magic == otypes::object::MAGIC);
-  char hashstr[24];
-  snprintf(hashstr, sizeof(hashstr), "%016lx", hash);
-  std::string _path = repo_path + "/objects/" + hashstr;
-  const char *path = _path.c_str();
+  const char *path = get_obj_path(hash).c_str();
   struct stat statbuf;
   if (stat(path, &statbuf) == 0) {
     // An existing object!
@@ -838,10 +848,7 @@ ogl_repo::store_obj(uint64_t hash, const otypes::object* obj) {
 
 std::unique_ptr<otypes::object>
 ogl_repo::load_obj(uint64_t hash) {
-  char hashstr[24];
-  snprintf(hashstr, sizeof(hashstr), "%016lx", hash);
-  std::string _path = repo_path + "/objects/" + hashstr;
-  const char* path = _path.c_str();
+  const char* path = get_obj_path(hash).c_str();
   int fd = open(path, O_RDONLY);
   otypes::object obj;
   auto cp = read(fd, &obj, sizeof(obj));
@@ -1211,4 +1218,16 @@ ogl_repo::merge(ogl_repo* src, ogl_repo* dst, ogl_repo* common) {
     dir->diff(cmmdir, apply_changes);
   }
   return true;
+}
+
+int
+ogl_repo::make_temp(std::string& temppath) {
+  std::string _buf = repo_path + "/tmp/temp-XXXXXX";
+  std::unique_ptr<char> buf(new char[_buf.size() + 1]);
+  _buf.copy(buf.get(), _buf.size());
+  auto fd = mkstemp(buf.get());
+  if (fd >= 0) {
+    temppath = buf.get();
+  }
+  return fd;
 }

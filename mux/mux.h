@@ -263,6 +263,27 @@ public:
 };
 
 
+/**
+ * Interaction among Mux and other classes.
+ *
+ *                     PacketListener
+ *                           ^
+ *                           | <<inherit>>
+ *                           |
+ *               Write       |    HandleIncomingPacket
+ * Transport <------------- Mux -----------------------> Channel
+ *           ------------->  |
+ *             ReceiveRaw    +-------> mControlChan: Channel
+ *
+ *  Mux -------> ChannelListener
+ *
+ *  Channel --------------> PacketListener
+ *                               ^
+ *                               | <<inherit>>
+ *                               |
+ *                          StreamChannel ------> StreamListener
+ *
+ */
 class Mux : private PacketListener {
 public:
   enum MuxSide {
